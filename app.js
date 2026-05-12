@@ -9,8 +9,6 @@ import { getFirestore, collection, doc, setDoc, getDoc, getDocs,
 import { getAuth, signInWithEmailAndPassword, signOut,
   onAuthStateChanged, createUserWithEmailAndPassword
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getStorage, ref, uploadString, getDownloadURL
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 // ============================================================
 // Firebase 設定（請確認這裡的設定與您的 Firebase 專案相符）
@@ -24,7 +22,7 @@ const firebaseConfig = {
   appId: "1:1065273909620:web:58ab926235611f77c4cc21"
 };
 
-let app, db, auth, storage;
+let app, db, auth;
 
 // ============================================================
 // 初始化 Firebase（含錯誤捕捉）
@@ -33,7 +31,6 @@ try {
   app = initializeApp(firebaseConfig);
   db = getFirestore(app);
   auth = getAuth(app);
-  storage = getStorage(app);
   console.log("Firebase 初始化成功");
 } catch (e) {
   console.error("Firebase 初始化失敗：", e);
@@ -51,81 +48,14 @@ let currentUser = null;
 let currentUserData = null;
 let currentPosition = null;
 let clockTimer = null;
-let gpsWatchId = null;          // GPS 持續監控 ID
-let autoClockOutDone = false;   // 避免重複自動打卡
-let reminderTimer = null;       // 下班提醒計時器
-let reminderCount = 0;          // 提醒次數計數
-let hasClockedIn = false;       // 今日是否已上班打卡
-let hasClockedOut = false;      // 今日是否已下班打卡
 let sysSettings = {
   locationName: '公司總部',
-  lat: 24.1362445,
-  lng: 120.6527999,
-  radius: 50,
+  lat: 25.033964,
+  lng: 121.564468,
+  radius: 200,
   workStart: '09:00',
   workEnd: '18:00'
 };
-
-// ============================================================
-// 班表設定（依角色與星期自動判斷）
-// 星期: 0=日 1=一 2=二 3=三 4=四 5=五 6=六
-// ============================================================
-const SCHEDULE = {
-  // 正職員工班表
-  fulltime: {
-    // 公休日
-    holiday: [3], // 週三公休
-    // 早班設定（依星期）
-    morning: {
-      1: { start: '10:00', end: '13:30', overEnd: '14:00' }, // 週一
-      2: { start: '09:00', end: '13:30', overEnd: '14:00' }, // 週二
-      4: { start: '09:00', end: '13:30', overEnd: '14:00' }, // 週四
-      5: { start: '09:00', end: '13:30', overEnd: '14:00' }, // 週五
-      6: { start: '09:00', end: '13:30', overEnd: '14:00' }, // 週六
-      0: { start: '09:00', end: '13:30', overEnd: '14:00' }, // 週日
-    },
-    // 晚班設定（每日都有）
-    evening: { start: '17:00', end: '21:00', overEnd: '21:30' }
-  },
-  // 工讀生班表
-  parttime: {
-    holiday: [3], // 週三公休
-    morning: { start: '11:00', end: '13:30', overEnd: '14:00' },
-    evening: { start: '17:00', end: '20:30', overEnd: '21:00' }
-  }
-};
-
-// 取得目前應套用的班表
-function getCurrentShiftInfo(role) {
-  const now = new Date();
-  const day = now.getDay(); // 0=日,1=一...6=六
-  const hour = now.getHours();
-  const minute = now.getMinutes();
-  const nowMins = hour * 60 + minute;
-
-  const schedule = role === 'parttime' ? SCHEDULE.parttime : SCHEDULE.fulltime;
-
-  // 公休日
-  if (schedule.holiday.includes(day)) {
-    return { isHoliday: true, shiftName: '公休日', start: null, end: null };
-  }
-
-  // 判斷目前是早班還是晚班（以 15:00 為分界）
-  const isEvening = nowMins >= 15 * 60;
-
-  if (isEvening) {
-    const ev = schedule.evening;
-    return { isHoliday: false, shiftName: '晚班', start: ev.start, end: ev.end, overEnd: ev.overEnd };
-  } else {
-    let morning;
-    if (role === 'parttime') {
-      morning = schedule.morning;
-    } else {
-      morning = schedule.morning[day] || schedule.morning[2]; // 預設用週二
-    }
-    return { isHoliday: false, shiftName: '早班', start: morning.start, end: morning.end, overEnd: morning.overEnd };
-  }
-}
 
 // ============================================================
 // 工具函式
@@ -267,8 +197,6 @@ async function handleLogin() {
 
 async function handleLogout() {
   if (clockTimer) clearInterval(clockTimer);
-  stopGPSWatch();
-  stopWorkReminder();
   try { await signOut(auth); } catch (e) { console.error(e); }
 }
 
@@ -309,29 +237,12 @@ async function loadSettings() {
 // ============================================================
 function initEmployee() {
   document.getElementById('userNameEmp').textContent = currentUserData.name || '員工';
-  const roleLabel = currentUserData.role === 'parttime' ? '工讀生' : '正職';
-  document.getElementById('userDeptEmp').textContent = `${currentUserData.dept || ''} · ${roleLabel}`;
+  document.getElementById('userDeptEmp').textContent = currentUserData.dept || '';
   document.getElementById('userAvatarEmp').textContent = (currentUserData.name || '員')[0];
   startClock();
   getGPS();
-  startGPSWatch();
-  startWorkReminder();
   loadTodayStatus();
-  updateShiftDisplay();
   populateMonthSel('myMonthSel');
-  requestNotificationPermission();
-}
-
-function updateShiftDisplay() {
-  const role = currentUserData?.role || 'employee';
-  const shift = getCurrentShiftInfo(role);
-  const sub = document.getElementById('statusSub');
-  if (!sub) return;
-  if (shift.isHoliday) {
-    sub.textContent = '今日公休，請好好休息！';
-  } else {
-    sub.textContent = `${shift.shiftName}上班時間：${shift.start} – ${shift.end}`;
-  }
 }
 
 function startClock() {
@@ -393,7 +304,6 @@ async function loadTodayStatus() {
     const summary = document.getElementById('todaySummary');
 
     if (!rec) {
-      hasClockedIn = false; hasClockedOut = false;
       if (icon) icon.textContent = '📋';
       if (text) text.textContent = '今日尚未打卡';
       if (sub) sub.textContent = `正常上班時間：${sysSettings.workStart}`;
@@ -401,7 +311,6 @@ async function loadTodayStatus() {
       if (btnOut) btnOut.disabled = true;
       if (summary) summary.style.display = 'none';
     } else if (rec.clockIn && !rec.clockOut) {
-      hasClockedIn = true; hasClockedOut = false;
       if (icon) icon.textContent = '✅';
       if (text) text.textContent = '已上班打卡';
       if (sub) sub.textContent = `上班時間：${rec.clockIn}`;
@@ -409,8 +318,6 @@ async function loadTodayStatus() {
       if (btnOut) btnOut.disabled = false;
       showSummary(rec.clockIn, null);
     } else if (rec.clockIn && rec.clockOut) {
-      hasClockedIn = true; hasClockedOut = true;
-      autoClockOutDone = true;
       if (icon) icon.textContent = '🏠';
       if (text) text.textContent = '今日已完成打卡';
       if (sub) sub.textContent = `工作時數：${calcHoursStr(rec.clockIn, rec.clockOut)}`;
@@ -453,33 +360,24 @@ async function doClock(type) {
   if (btn) { btn.disabled = true; const lbl = btn.querySelector('.punch-label'); if (lbl) lbl.textContent = '打卡中...'; }
 
   try {
-    // 截取打卡畫面
-    const screenshotUrl = await captureClockScreen(type, timeStr);
-
     if (type === 'in') {
       await setDoc(doc(db, 'records', recId), {
         empId: currentUser.uid,
         empName: currentUserData.name,
         empDept: currentUserData.dept || '',
-        empRole: currentUserData.role || 'employee',
         date: today,
         clockIn: timeStr,
         clockOut: null,
         lat: currentPosition ? currentPosition.latitude : null,
         lng: currentPosition ? currentPosition.longitude : null,
-        clockInScreenshot: screenshotUrl || null,
         createdAt: serverTimestamp()
       });
-      hasClockedIn = true; hasClockedOut = false;
       showToast(`上班打卡成功！${timeStr}`, 'success');
     } else {
       await updateDoc(doc(db, 'records', recId), {
         clockOut: timeStr,
-        clockOutAt: serverTimestamp(),
-        clockOutScreenshot: screenshotUrl || null
+        clockOutAt: serverTimestamp()
       });
-      hasClockedOut = true; autoClockOutDone = true;
-      stopWorkReminder();
       showToast(`下班打卡成功！${timeStr}`, 'success');
     }
     loadTodayStatus();
@@ -488,66 +386,6 @@ async function doClock(type) {
     if (btn) btn.disabled = false;
   }
   if (btn) { const lbl = btn.querySelector('.punch-label'); if (lbl) lbl.textContent = type === 'in' ? '上班打卡' : '下班打卡'; }
-}
-
-// 截取打卡畫面並上傳 Firebase Storage
-async function captureClockScreen(type, timeStr) {
-  try {
-    const canvas = document.createElement('canvas');
-    canvas.width = 360;
-    canvas.height = 280;
-    const ctx = canvas.getContext('2d');
-
-    ctx.fillStyle = '#1a1a2e';
-    ctx.fillRect(0, 0, 360, 280);
-
-    ctx.fillStyle = type === 'in' ? '#2ec4b6' : '#e63946';
-    ctx.fillRect(0, 0, 360, 50);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 20px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(type === 'in' ? '✅  上班打卡成功' : '🔴  下班打卡成功', 180, 33);
-
-    ctx.fillStyle = '#e0e0e0';
-    ctx.font = '16px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(`姓名：${currentUserData.name || ''}`, 30, 80);
-    ctx.fillText(`部門：${currentUserData.dept || ''}`, 30, 108);
-    const roleLabel = currentUserData.role === 'parttime' ? '工讀生' : '正職員工';
-    ctx.fillText(`身份：${roleLabel}`, 30, 136);
-
-    ctx.strokeStyle = '#333355';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(20, 155); ctx.lineTo(340, 155);
-    ctx.stroke();
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 36px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(timeStr, 180, 205);
-
-    const now = new Date();
-    ctx.fillStyle = '#aaaaaa';
-    ctx.font = '14px sans-serif';
-    ctx.fillText(now.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }), 180, 232);
-
-    const gpsStatus = currentPosition
-      ? `✅ GPS已驗證（${sysSettings.locationName}）`
-      : '⚠️ GPS未取得';
-    ctx.fillStyle = currentPosition ? '#2ec4b6' : '#f77f00';
-    ctx.font = '13px sans-serif';
-    ctx.fillText(gpsStatus, 180, 260);
-
-    const dataUrl = canvas.toDataURL('image/png');
-    const base64 = dataUrl.split(',')[1];
-    const storageRef = ref(storage, `screenshots/${currentUser.uid}/${fmtDate(now)}_${type}_${Date.now()}.png`);
-    await uploadString(storageRef, base64, 'base64', { contentType: 'image/png' });
-    return await getDownloadURL(storageRef);
-  } catch (e) {
-    console.warn('截圖上傳失敗（不影響打卡）:', e);
-    return null;
-  }
 }
 
 window.doClock = doClock;
@@ -599,9 +437,23 @@ function initAdmin() {
   setInterval(updateClock, 1000);
   populateMonthSel('recMonth');
   populateMonthSel('expMonth');
+  populateMonthSel('reportMonth');
+  populateYearSel('exportYear');
   loadDashboard();
   loadEmployeeList();
   loadSettingsForm();
+}
+
+function populateYearSel(selId) {
+  const sel = document.getElementById(selId);
+  if (!sel) return;
+  const now = new Date();
+  sel.innerHTML = '';
+  for (let i = 0; i < 6; i++) {
+    const y = now.getFullYear() - i;
+    const opt = new Option(`${y}年`, y);
+    sel.add(opt);
+  }
 }
 
 async function loadDashboard() {
@@ -668,23 +520,10 @@ async function loadRecords() {
     records.forEach(r => {
       const h = r.clockIn && r.clockOut ? calcHoursStr(r.clockIn, r.clockOut) : '--';
       const loc = r.lat ? `${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}` : '無位置';
-      const roleLabel = r.empRole === 'parttime' ? '工讀生' : '正職';
-      const inShot = r.clockInScreenshot ? `<a href="${r.clockInScreenshot}" target="_blank" style="color:#2ec4b6">🖼上班</a>` : '--';
-      const outShot = r.clockOutScreenshot ? `<a href="${r.clockOutScreenshot}" target="_blank" style="color:#e63946">🖼下班</a>` : '--';
-      html += `<tr>
-        <td>${r.date}</td>
-        <td>${r.empName || ''}</td>
-        <td>${r.empDept || ''}<br><small style="color:#aaa">${roleLabel}</small></td>
-        <td>${r.clockIn || '--'}</td>
-        <td>${r.clockOut || '--'}</td>
-        <td>${h}</td>
-        <td style="font-size:12px;color:#999;">${loc}</td>
-        <td>${inShot} ${outShot}</td>
-        <td>${r.note || ''}</td>
-      </tr>`;
+      html += `<tr><td>${r.date}</td><td>${r.empName || ''}</td><td>${r.empDept || ''}</td><td>${r.clockIn || '--'}</td><td>${r.clockOut || '--'}</td><td>${h}</td><td style="font-size:12px;color:#999;">${loc}</td><td>${r.note || ''}</td></tr>`;
     });
     const recBody = document.getElementById('recBody');
-    if (recBody) recBody.innerHTML = html || '<tr><td colspan="9" class="empty-row">本月無出勤記錄</td></tr>';
+    if (recBody) recBody.innerHTML = html || '<tr><td colspan="8" class="empty-row">本月無出勤記錄</td></tr>';
   } catch (e) {
     console.error('loadRecords error:', e);
   }
@@ -695,7 +534,7 @@ window.loadRecords = loadRecords;
 async function loadEmployeeList() {
   try {
     const snap = await getDocs(collection(db, 'users'));
-    const employees = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(e => e.role === 'employee' || e.role === 'parttime');
+    const employees = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(e => e.role === 'employee');
     ['recEmp', 'expEmp'].forEach(selId => {
       const sel = document.getElementById(selId);
       if (!sel) return;
@@ -706,19 +545,17 @@ async function loadEmployeeList() {
     });
     let html = '';
     employees.forEach(e => {
-      const roleLabel = e.role === 'parttime' ? '<span class="badge badge-blue">工讀生</span>' : '<span class="badge badge-green">正職</span>';
       html += `<tr>
         <td><strong>${e.name}</strong></td>
         <td>${e.email || ''}</td>
         <td>${e.dept || ''}</td>
-        <td>${roleLabel}</td>
         <td>${e.joinDate || ''}</td>
         <td>${e.active !== false ? '<span class="badge badge-green">在職</span>' : '<span class="badge badge-gray">停用</span>'}</td>
         <td><button class="btn btn-sm btn-danger" onclick="toggleEmpStatus('${e.id}', ${e.active !== false})">${e.active !== false ? '停用' : '啟用'}</button></td>
       </tr>`;
     });
     const empBody = document.getElementById('empBody');
-    if (empBody) empBody.innerHTML = html || '<tr><td colspan="7" class="empty-row">尚無員工資料</td></tr>';
+    if (empBody) empBody.innerHTML = html || '<tr><td colspan="6" class="empty-row">尚無員工資料</td></tr>';
   } catch (e) {
     console.error('loadEmployeeList error:', e);
   }
@@ -730,7 +567,6 @@ async function createEmployee() {
   const pwd = document.getElementById('newEmpPwd')?.value;
   const dept = document.getElementById('newEmpDept')?.value.trim();
   const joinDate = document.getElementById('newEmpJoin')?.value;
-  const role = document.getElementById('newEmpRole')?.value || 'employee';
   const errEl = document.getElementById('addEmpError');
 
   if (!name || !email || !pwd) { showError(errEl, '請填寫姓名、Email 與密碼'); return; }
@@ -740,7 +576,7 @@ async function createEmployee() {
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, pwd);
     await setDoc(doc(db, 'users', cred.user.uid), {
-      name, email, dept: dept || '', role,
+      name, email, dept: dept || '', role: 'employee',
       joinDate: joinDate || '', active: true, createdAt: serverTimestamp()
     });
     showToast(`員工 ${name} 新增成功`, 'success');
@@ -831,191 +667,218 @@ async function exportCSV() {
 window.exportCSV = exportCSV;
 
 // ============================================================
-// GPS 持續監控 — 離開範圍自動打卡下班
+// 工時計算工具函式
 // ============================================================
-function startGPSWatch() {
-  if (!navigator.geolocation) return;
-  stopGPSWatch();
-  autoClockOutDone = false;
-
-  gpsWatchId = navigator.geolocation.watchPosition(
-    async (pos) => {
-      currentPosition = pos.coords;
-      const dist = calcDist(pos.coords.latitude, pos.coords.longitude, sysSettings.lat, sysSettings.lng);
-      const gpsText = document.getElementById('gpsText');
-      const gpsIcon = document.getElementById('gpsIcon');
-
-      if (dist <= sysSettings.radius) {
-        if (gpsText) { gpsText.textContent = `位置確認：${sysSettings.locationName}（${Math.round(dist)} 公尺）`; gpsText.style.color = '#2ec4b6'; }
-        if (gpsIcon) gpsIcon.textContent = '✅';
-      } else {
-        if (gpsText) { gpsText.textContent = `已離開工作地點（${Math.round(dist)} 公尺）`; gpsText.style.color = '#e63946'; }
-        if (gpsIcon) gpsIcon.textContent = '🚨';
-
-        // 離開範圍且已上班且尚未下班 → 自動打卡下班
-        if (hasClockedIn && !hasClockedOut && !autoClockOutDone && currentUser) {
-          autoClockOutDone = true;
-          await autoClockOut();
-        }
-      }
-    },
-    (err) => {
-      console.warn('GPS 監控錯誤:', err.message);
-    },
-    { enableHighAccuracy: true, maximumAge: 30000, timeout: 20000 }
-  );
+function timeStrToMins(t) {
+  if (!t) return 0;
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
 }
 
-function stopGPSWatch() {
-  if (gpsWatchId !== null) {
-    navigator.geolocation.clearWatch(gpsWatchId);
-    gpsWatchId = null;
+function minsToHoursStr(mins) {
+  if (mins <= 0) return '0h 0m';
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+}
+
+// 取得某日正常下班時間（依角色與星期）
+function getExpectedEnd(dateStr, role) {
+  const d = new Date(dateStr);
+  const day = d.getDay();
+  const schedule = role === 'parttime' ? SCHEDULE.parttime : SCHEDULE.fulltime;
+  if (schedule.holiday.includes(day)) return null;
+  // 簡化：依打卡時間判斷早/晚班
+  return null; // 將在報表中用實際打卡時間判斷
+}
+
+// 判斷是否為異常打卡
+function detectAnomaly(rec) {
+  const anomalies = [];
+  if (rec.clockIn && !rec.clockOut) {
+    anomalies.push('未打下班卡');
   }
+  if (rec.clockIn && rec.clockOut) {
+    const inMins = timeStrToMins(rec.clockIn);
+    const outMins = timeStrToMins(rec.clockOut);
+    const worked = outMins - inMins;
+    if (worked < 0) anomalies.push('時間異常');
+    if (worked > 0 && worked < 30) anomalies.push('工時過短(<30分)');
+  }
+  if (rec.note && rec.note.includes('自動打卡')) {
+    anomalies.push('自動打卡');
+  }
+  return anomalies;
 }
 
-async function autoClockOut() {
-  if (!currentUser) return;
-  const now = new Date();
-  const today = fmtDate(now);
-  const timeStr = now.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit' });
-  const recId = `${today}_${currentUser.uid}`;
+// ============================================================
+// 月結工時報表
+// ============================================================
+async function loadMonthlyReport() {
+  const sel = document.getElementById('reportMonth');
+  if (!sel) return;
+  const month = sel.value;
+  const reportBody = document.getElementById('reportBody');
+  const reportSummary = document.getElementById('reportSummary');
+  if (reportBody) reportBody.innerHTML = '<tr><td colspan="7" class="empty-row">載入中...</td></tr>';
+
   try {
-    await updateDoc(doc(db, 'records', recId), {
-      clockOut: timeStr,
-      clockOutAt: serverTimestamp(),
-      note: '離開工作地點自動打卡'
+    // 取得所有員工
+    const empSnap = await getDocs(collection(db, 'users'));
+    const employees = empSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .filter(e => e.role === 'employee' || e.role === 'parttime');
+
+    // 取得所有該月打卡記錄
+    const q = query(
+      collection(db, 'records'),
+      where('date', '>=', month + '-01'),
+      where('date', '<=', month + '-31'),
+      orderBy('date')
+    );
+    const recSnap = await getDocs(q);
+    const allRecords = recSnap.docs.map(d => d.data());
+
+    let html = '';
+    let totalEmpMins = 0;
+    let totalAnomalies = 0;
+
+    employees.forEach(emp => {
+      const empRecs = allRecords.filter(r => r.empId === emp.id);
+      let totalMins = 0;
+      let days = 0;
+      let anomalyCount = 0;
+      let missingOut = 0;
+
+      empRecs.forEach(r => {
+        const anomalies = detectAnomaly(r);
+        if (anomalies.length > 0) anomalyCount++;
+        if (anomalies.includes('未打下班卡')) missingOut++;
+        if (r.clockIn && r.clockOut) {
+          const mins = timeStrToMins(r.clockOut) - timeStrToMins(r.clockIn);
+          if (mins > 0) { totalMins += mins; days++; }
+        }
+      });
+
+      totalEmpMins += totalMins;
+      totalAnomalies += anomalyCount;
+
+      const roleLabel = emp.role === 'parttime' ? '工讀生' : '正職';
+      const anomalyBadge = anomalyCount > 0
+        ? `<span style="color:#e63946;font-weight:bold">⚠️ ${anomalyCount}筆</span>`
+        : '<span style="color:#2ec4b6">✅ 正常</span>';
+      const missingBadge = missingOut > 0
+        ? `<span style="color:#f77f00">${missingOut}次未打下班</span>`
+        : '';
+
+      html += `<tr>
+        <td><strong>${emp.name}</strong></td>
+        <td>${emp.dept || ''}</td>
+        <td>${roleLabel}</td>
+        <td>${days} 天</td>
+        <td><strong>${minsToHoursStr(totalMins)}</strong></td>
+        <td>${anomalyBadge} ${missingBadge}</td>
+        <td><button class="btn btn-sm btn-outline" onclick="showEmpDetail('${emp.id}','${emp.name}','${month}')">明細</button></td>
+      </tr>`;
     });
-    hasClockedOut = true;
-    stopWorkReminder();
-    loadTodayStatus();
-    // 顯示提醒視窗
-    showAutoClockOutAlert(timeStr);
-    // 發送推播通知
-    sendNotification('自動下班打卡', `您已離開工作地點，系統已自動記錄下班時間 ${timeStr}`);
-  } catch (e) {
-    console.error('自動下班打卡失敗:', e);
-    autoClockOutDone = false; // 允許重試
-  }
-}
 
-function showAutoClockOutAlert(timeStr) {
-  // 建立浮動提醒卡片
-  const existing = document.getElementById('autoClockOutAlert');
-  if (existing) existing.remove();
+    if (reportBody) reportBody.innerHTML = html || '<tr><td colspan="7" class="empty-row">本月無資料</td></tr>';
 
-  const div = document.createElement('div');
-  div.id = 'autoClockOutAlert';
-  div.style.cssText = `
-    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    background: #1a1a2e; border: 2px solid #2ec4b6; border-radius: 16px;
-    padding: 24px 28px; z-index: 9999; text-align: center;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5); max-width: 320px; width: 90%;
-  `;
-  div.innerHTML = `
-    <div style="font-size:40px;margin-bottom:12px">📍</div>
-    <div style="color:#2ec4b6;font-size:18px;font-weight:bold;margin-bottom:8px">自動下班打卡</div>
-    <div style="color:#e0e0e0;font-size:14px;margin-bottom:16px">您已離開工作地點<br>系統已自動記錄下班時間<br><strong style="color:#fff;font-size:20px">${timeStr}</strong></div>
-    <button onclick="document.getElementById('autoClockOutAlert').remove()" style="
-      background:#2ec4b6;color:#fff;border:none;border-radius:8px;
-      padding:10px 24px;font-size:15px;cursor:pointer;width:100%
-    ">確認</button>
-  `;
-  document.body.appendChild(div);
-  // 10 秒後自動關閉
-  setTimeout(() => { if (div.parentNode) div.remove(); }, 10000);
-}
-
-// ============================================================
-// 下班提醒功能
-// ============================================================
-function requestNotificationPermission() {
-  if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
-  }
-}
-
-function sendNotification(title, body) {
-  if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification(title, { body, icon: '⏰' });
-  }
-}
-
-function startWorkReminder() {
-  stopWorkReminder();
-  reminderCount = 0;
-
-  // 每分鐘檢查一次是否需要提醒
-  reminderTimer = setInterval(() => {
-    if (!hasClockedIn || hasClockedOut) return;
-
-    const now = new Date();
-    const role = currentUserData?.role || 'employee';
-    const shift = getCurrentShiftInfo(role);
-    if (shift.isHoliday || !shift.end) return;
-
-    const [endH, endM] = shift.end.split(':').map(Number);
-    const workEndMins = endH * 60 + endM;
-    const nowMins = now.getHours() * 60 + now.getMinutes();
-
-    // 到達下班時間後才提醒
-    if (nowMins < workEndMins) return;
-
-    const overMins = nowMins - workEndMins;
-
-    // 第一次提醒：到達下班時間時
-    // 後續提醒：每超過 15 分鐘提醒一次
-    const shouldRemindAt = reminderCount === 0 ? 0 : reminderCount * 15;
-    if (overMins >= shouldRemindAt) {
-      reminderCount++;
-      const msg = reminderCount === 1
-        ? `現在是 ${sysSettings.workEnd} 下班時間，請記得打卡下班！`
-        : `您已超過下班時間 ${overMins} 分鐘，尚未打卡下班！`;
-
-      // 展示提醒 Toast
-      showToast(msg, 'warning');
-      // 發送推播通知
-      sendNotification('下班提醒', msg);
-      // 展示提醒卡片
-      showReminderCard(msg);
+    if (reportSummary) {
+      reportSummary.innerHTML = `
+        <div class="kpi-grid" style="margin-bottom:0">
+          <div class="kpi-card"><div class="kpi-num">${employees.length}</div><div class="kpi-label">員工人數</div></div>
+          <div class="kpi-card kpi-green"><div class="kpi-num">${minsToHoursStr(totalEmpMins)}</div><div class="kpi-label">全員總工時</div></div>
+          <div class="kpi-card kpi-red"><div class="kpi-num">${totalAnomalies}</div><div class="kpi-label">異常筆數</div></div>
+        </div>`;
     }
-  }, 60000); // 每分鐘檢查
-}
-
-function stopWorkReminder() {
-  if (reminderTimer) {
-    clearInterval(reminderTimer);
-    reminderTimer = null;
+  } catch (e) {
+    console.error('loadMonthlyReport error:', e);
+    if (reportBody) reportBody.innerHTML = '<tr><td colspan="7" class="empty-row">載入失敗</td></tr>';
   }
-  reminderCount = 0;
 }
 
-function showReminderCard(msg) {
-  const existing = document.getElementById('reminderCard');
-  if (existing) existing.remove();
+window.loadMonthlyReport = loadMonthlyReport;
 
-  const div = document.createElement('div');
-  div.id = 'reminderCard';
-  div.style.cssText = `
-    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    background: #1a1a2e; border: 2px solid #f77f00; border-radius: 16px;
-    padding: 24px 28px; z-index: 9999; text-align: center;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5); max-width: 320px; width: 90%;
-  `;
-  div.innerHTML = `
-    <div style="font-size:40px;margin-bottom:12px">⏰</div>
-    <div style="color:#f77f00;font-size:18px;font-weight:bold;margin-bottom:8px">下班打卡提醒</div>
-    <div style="color:#e0e0e0;font-size:14px;margin-bottom:16px">${msg}</div>
-    <button onclick="doClock('out');document.getElementById('reminderCard').remove()" style="
-      background:#f77f00;color:#fff;border:none;border-radius:8px;
-      padding:10px 24px;font-size:15px;cursor:pointer;width:100%;margin-bottom:8px
-    ">立刻打卡下班</button>
-    <button onclick="document.getElementById('reminderCard').remove()" style="
-      background:transparent;color:#aaa;border:1px solid #444;border-radius:8px;
-      padding:8px 24px;font-size:13px;cursor:pointer;width:100%
-    ">稍後再說</button>
-  `;
-  document.body.appendChild(div);
+// 顯示個別員工明細
+async function showEmpDetail(empId, empName, month) {
+  const modal = document.getElementById('empDetailModal');
+  const title = document.getElementById('empDetailTitle');
+  const body = document.getElementById('empDetailBody');
+  if (!modal) return;
+  if (title) title.textContent = `${empName} — ${month} 出勤明細`;
+  if (body) body.innerHTML = '載入中...';
+  modal.style.display = 'flex';
+
+  try {
+    const q = query(
+      collection(db, 'records'),
+      where('empId', '==', empId),
+      where('date', '>=', month + '-01'),
+      where('date', '<=', month + '-31'),
+      orderBy('date')
+    );
+    const snaps = await getDocs(q);
+    const records = snaps.docs.map(d => d.data());
+
+    let html = '<table class="dt"><thead><tr><th>日期</th><th>上班</th><th>下班</th><th>工時</th><th>狀態</th></tr></thead><tbody>';
+    records.forEach(r => {
+      const mins = r.clockIn && r.clockOut ? timeStrToMins(r.clockOut) - timeStrToMins(r.clockIn) : 0;
+      const h = mins > 0 ? minsToHoursStr(mins) : '--';
+      const anomalies = detectAnomaly(r);
+      const statusHtml = anomalies.length > 0
+        ? `<span style="color:#e63946">⚠️ ${anomalies.join(', ')}</span>`
+        : '<span style="color:#2ec4b6">✅ 正常</span>';
+      html += `<tr><td>${r.date}</td><td>${r.clockIn||'--'}</td><td>${r.clockOut||'--'}</td><td>${h}</td><td>${statusHtml}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    if (body) body.innerHTML = records.length ? html : '本月無出勤記錄';
+  } catch (e) {
+    if (body) body.innerHTML = '載入失敗';
+  }
 }
+
+window.showEmpDetail = showEmpDetail;
+
+// ============================================================
+// 全年記錄匯出（符合勞基法保存要求）
+// ============================================================
+async function exportYearCSV() {
+  const yearSel = document.getElementById('exportYear');
+  const year = yearSel ? yearSel.value : new Date().getFullYear();
+  showToast(`正在產生 ${year} 年度報表，請稍候...`, 'info');
+
+  try {
+    const q = query(
+      collection(db, 'records'),
+      where('date', '>=', `${year}-01-01`),
+      where('date', '<=', `${year}-12-31`),
+      orderBy('date')
+    );
+    const snaps = await getDocs(q);
+    const records = snaps.docs.map(d => d.data());
+
+    let csv = '\uFEFF日期,姓名,部門,身份,上班時間,下班時間,工作時數,異常標記,備註\n';
+    records.forEach(r => {
+      const mins = r.clockIn && r.clockOut ? timeStrToMins(r.clockOut) - timeStrToMins(r.clockIn) : 0;
+      const h = mins > 0 ? minsToHoursStr(mins) : '';
+      const roleLabel = r.empRole === 'parttime' ? '工讀生' : '正職';
+      const anomalies = detectAnomaly(r);
+      const anomalyStr = anomalies.join('; ');
+      csv += `${r.date},${r.empName||''},${r.empDept||''},${roleLabel},${r.clockIn||''},${r.clockOut||''},${h},${anomalyStr},${r.note||''}\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `出勤記錄_${year}年度完整.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`${year} 年度報表已下載，共 ${records.length} 筆記錄`, 'success');
+  } catch (e) {
+    showToast('匯出失敗：' + e.message, 'error');
+  }
+}
+
+window.exportYearCSV = exportYearCSV;
 
 // ============================================================
 // Tab 切換
