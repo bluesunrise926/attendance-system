@@ -9,6 +9,8 @@ import { getFirestore, collection, doc, setDoc, getDoc, getDocs,
 import { getAuth, signInWithEmailAndPassword, signOut,
   onAuthStateChanged, createUserWithEmailAndPassword
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getStorage, ref, uploadString, getDownloadURL
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 // ============================================================
 // Firebase 設定（請確認這裡的設定與您的 Firebase 專案相符）
@@ -22,7 +24,7 @@ const firebaseConfig = {
   appId: "1:1065273909620:web:58ab926235611f77c4cc21"
 };
 
-let app, db, auth;
+let app, db, auth, storage;
 
 // ============================================================
 // 初始化 Firebase（含錯誤捕捉）
@@ -31,6 +33,7 @@ try {
   app = initializeApp(firebaseConfig);
   db = getFirestore(app);
   auth = getAuth(app);
+  storage = getStorage(app);
   console.log("Firebase 初始化成功");
 } catch (e) {
   console.error("Firebase 初始化失敗：", e);
@@ -58,10 +61,71 @@ let sysSettings = {
   locationName: '公司總部',
   lat: 24.1362445,
   lng: 120.6527999,
-  radius: 200,
+  radius: 50,
   workStart: '09:00',
   workEnd: '18:00'
 };
+
+// ============================================================
+// 班表設定（依角色與星期自動判斷）
+// 星期: 0=日 1=一 2=二 3=三 4=四 5=五 6=六
+// ============================================================
+const SCHEDULE = {
+  // 正職員工班表
+  fulltime: {
+    // 公休日
+    holiday: [3], // 週三公休
+    // 早班設定（依星期）
+    morning: {
+      1: { start: '10:00', end: '13:30', overEnd: '14:00' }, // 週一
+      2: { start: '09:00', end: '13:30', overEnd: '14:00' }, // 週二
+      4: { start: '09:00', end: '13:30', overEnd: '14:00' }, // 週四
+      5: { start: '09:00', end: '13:30', overEnd: '14:00' }, // 週五
+      6: { start: '09:00', end: '13:30', overEnd: '14:00' }, // 週六
+      0: { start: '09:00', end: '13:30', overEnd: '14:00' }, // 週日
+    },
+    // 晚班設定（每日都有）
+    evening: { start: '17:00', end: '21:00', overEnd: '21:30' }
+  },
+  // 工讀生班表
+  parttime: {
+    holiday: [3], // 週三公休
+    morning: { start: '11:00', end: '13:30', overEnd: '14:00' },
+    evening: { start: '17:00', end: '20:30', overEnd: '21:00' }
+  }
+};
+
+// 取得目前應套用的班表
+function getCurrentShiftInfo(role) {
+  const now = new Date();
+  const day = now.getDay(); // 0=日,1=一...6=六
+  const hour = now.getHours();
+  const minute = now.getMinutes();
+  const nowMins = hour * 60 + minute;
+
+  const schedule = role === 'parttime' ? SCHEDULE.parttime : SCHEDULE.fulltime;
+
+  // 公休日
+  if (schedule.holiday.includes(day)) {
+    return { isHoliday: true, shiftName: '公休日', start: null, end: null };
+  }
+
+  // 判斷目前是早班還是晚班（以 15:00 為分界）
+  const isEvening = nowMins >= 15 * 60;
+
+  if (isEvening) {
+    const ev = schedule.evening;
+    return { isHoliday: false, shiftName: '晚班', start: ev.start, end: ev.end, overEnd: ev.overEnd };
+  } else {
+    let morning;
+    if (role === 'parttime') {
+      morning = schedule.morning;
+    } else {
+      morning = schedule.morning[day] || schedule.morning[2]; // 預設用週二
+    }
+    return { isHoliday: false, shiftName: '早班', start: morning.start, end: morning.end, overEnd: morning.overEnd };
+  }
+}
 
 // ============================================================
 // 工具函式
@@ -245,15 +309,29 @@ async function loadSettings() {
 // ============================================================
 function initEmployee() {
   document.getElementById('userNameEmp').textContent = currentUserData.name || '員工';
-  document.getElementById('userDeptEmp').textContent = currentUserData.dept || '';
+  const roleLabel = currentUserData.role === 'parttime' ? '工讀生' : '正職';
+  document.getElementById('userDeptEmp').textContent = `${currentUserData.dept || ''} · ${roleLabel}`;
   document.getElementById('userAvatarEmp').textContent = (currentUserData.name || '員')[0];
   startClock();
   getGPS();
-  startGPSWatch();     // 啟動 GPS 持續監控
-  startWorkReminder(); // 啟動下班提醒
+  startGPSWatch();
+  startWorkReminder();
   loadTodayStatus();
+  updateShiftDisplay();
   populateMonthSel('myMonthSel');
-  requestNotificationPermission(); // 申請推播通知權限
+  requestNotificationPermission();
+}
+
+function updateShiftDisplay() {
+  const role = currentUserData?.role || 'employee';
+  const shift = getCurrentShiftInfo(role);
+  const sub = document.getElementById('statusSub');
+  if (!sub) return;
+  if (shift.isHoliday) {
+    sub.textContent = '今日公休，請好好休息！';
+  } else {
+    sub.textContent = `${shift.shiftName}上班時間：${shift.start} – ${shift.end}`;
+  }
 }
 
 function startClock() {
@@ -375,16 +453,21 @@ async function doClock(type) {
   if (btn) { btn.disabled = true; const lbl = btn.querySelector('.punch-label'); if (lbl) lbl.textContent = '打卡中...'; }
 
   try {
+    // 截取打卡畫面
+    const screenshotUrl = await captureClockScreen(type, timeStr);
+
     if (type === 'in') {
       await setDoc(doc(db, 'records', recId), {
         empId: currentUser.uid,
         empName: currentUserData.name,
         empDept: currentUserData.dept || '',
+        empRole: currentUserData.role || 'employee',
         date: today,
         clockIn: timeStr,
         clockOut: null,
         lat: currentPosition ? currentPosition.latitude : null,
         lng: currentPosition ? currentPosition.longitude : null,
+        clockInScreenshot: screenshotUrl || null,
         createdAt: serverTimestamp()
       });
       hasClockedIn = true; hasClockedOut = false;
@@ -392,7 +475,8 @@ async function doClock(type) {
     } else {
       await updateDoc(doc(db, 'records', recId), {
         clockOut: timeStr,
-        clockOutAt: serverTimestamp()
+        clockOutAt: serverTimestamp(),
+        clockOutScreenshot: screenshotUrl || null
       });
       hasClockedOut = true; autoClockOutDone = true;
       stopWorkReminder();
@@ -404,6 +488,66 @@ async function doClock(type) {
     if (btn) btn.disabled = false;
   }
   if (btn) { const lbl = btn.querySelector('.punch-label'); if (lbl) lbl.textContent = type === 'in' ? '上班打卡' : '下班打卡'; }
+}
+
+// 截取打卡畫面並上傳 Firebase Storage
+async function captureClockScreen(type, timeStr) {
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 360;
+    canvas.height = 280;
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, 360, 280);
+
+    ctx.fillStyle = type === 'in' ? '#2ec4b6' : '#e63946';
+    ctx.fillRect(0, 0, 360, 50);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(type === 'in' ? '✅  上班打卡成功' : '🔴  下班打卡成功', 180, 33);
+
+    ctx.fillStyle = '#e0e0e0';
+    ctx.font = '16px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(`姓名：${currentUserData.name || ''}`, 30, 80);
+    ctx.fillText(`部門：${currentUserData.dept || ''}`, 30, 108);
+    const roleLabel = currentUserData.role === 'parttime' ? '工讀生' : '正職員工';
+    ctx.fillText(`身份：${roleLabel}`, 30, 136);
+
+    ctx.strokeStyle = '#333355';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(20, 155); ctx.lineTo(340, 155);
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 36px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(timeStr, 180, 205);
+
+    const now = new Date();
+    ctx.fillStyle = '#aaaaaa';
+    ctx.font = '14px sans-serif';
+    ctx.fillText(now.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }), 180, 232);
+
+    const gpsStatus = currentPosition
+      ? `✅ GPS已驗證（${sysSettings.locationName}）`
+      : '⚠️ GPS未取得';
+    ctx.fillStyle = currentPosition ? '#2ec4b6' : '#f77f00';
+    ctx.font = '13px sans-serif';
+    ctx.fillText(gpsStatus, 180, 260);
+
+    const dataUrl = canvas.toDataURL('image/png');
+    const base64 = dataUrl.split(',')[1];
+    const storageRef = ref(storage, `screenshots/${currentUser.uid}/${fmtDate(now)}_${type}_${Date.now()}.png`);
+    await uploadString(storageRef, base64, 'base64', { contentType: 'image/png' });
+    return await getDownloadURL(storageRef);
+  } catch (e) {
+    console.warn('截圖上傳失敗（不影響打卡）:', e);
+    return null;
+  }
 }
 
 window.doClock = doClock;
@@ -524,10 +668,23 @@ async function loadRecords() {
     records.forEach(r => {
       const h = r.clockIn && r.clockOut ? calcHoursStr(r.clockIn, r.clockOut) : '--';
       const loc = r.lat ? `${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}` : '無位置';
-      html += `<tr><td>${r.date}</td><td>${r.empName || ''}</td><td>${r.empDept || ''}</td><td>${r.clockIn || '--'}</td><td>${r.clockOut || '--'}</td><td>${h}</td><td style="font-size:12px;color:#999;">${loc}</td><td>${r.note || ''}</td></tr>`;
+      const roleLabel = r.empRole === 'parttime' ? '工讀生' : '正職';
+      const inShot = r.clockInScreenshot ? `<a href="${r.clockInScreenshot}" target="_blank" style="color:#2ec4b6">🖼上班</a>` : '--';
+      const outShot = r.clockOutScreenshot ? `<a href="${r.clockOutScreenshot}" target="_blank" style="color:#e63946">🖼下班</a>` : '--';
+      html += `<tr>
+        <td>${r.date}</td>
+        <td>${r.empName || ''}</td>
+        <td>${r.empDept || ''}<br><small style="color:#aaa">${roleLabel}</small></td>
+        <td>${r.clockIn || '--'}</td>
+        <td>${r.clockOut || '--'}</td>
+        <td>${h}</td>
+        <td style="font-size:12px;color:#999;">${loc}</td>
+        <td>${inShot} ${outShot}</td>
+        <td>${r.note || ''}</td>
+      </tr>`;
     });
     const recBody = document.getElementById('recBody');
-    if (recBody) recBody.innerHTML = html || '<tr><td colspan="8" class="empty-row">本月無出勤記錄</td></tr>';
+    if (recBody) recBody.innerHTML = html || '<tr><td colspan="9" class="empty-row">本月無出勤記錄</td></tr>';
   } catch (e) {
     console.error('loadRecords error:', e);
   }
@@ -538,7 +695,7 @@ window.loadRecords = loadRecords;
 async function loadEmployeeList() {
   try {
     const snap = await getDocs(collection(db, 'users'));
-    const employees = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(e => e.role === 'employee');
+    const employees = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(e => e.role === 'employee' || e.role === 'parttime');
     ['recEmp', 'expEmp'].forEach(selId => {
       const sel = document.getElementById(selId);
       if (!sel) return;
@@ -549,17 +706,19 @@ async function loadEmployeeList() {
     });
     let html = '';
     employees.forEach(e => {
+      const roleLabel = e.role === 'parttime' ? '<span class="badge badge-blue">工讀生</span>' : '<span class="badge badge-green">正職</span>';
       html += `<tr>
         <td><strong>${e.name}</strong></td>
         <td>${e.email || ''}</td>
         <td>${e.dept || ''}</td>
+        <td>${roleLabel}</td>
         <td>${e.joinDate || ''}</td>
         <td>${e.active !== false ? '<span class="badge badge-green">在職</span>' : '<span class="badge badge-gray">停用</span>'}</td>
         <td><button class="btn btn-sm btn-danger" onclick="toggleEmpStatus('${e.id}', ${e.active !== false})">${e.active !== false ? '停用' : '啟用'}</button></td>
       </tr>`;
     });
     const empBody = document.getElementById('empBody');
-    if (empBody) empBody.innerHTML = html || '<tr><td colspan="6" class="empty-row">尚無員工資料</td></tr>';
+    if (empBody) empBody.innerHTML = html || '<tr><td colspan="7" class="empty-row">尚無員工資料</td></tr>';
   } catch (e) {
     console.error('loadEmployeeList error:', e);
   }
@@ -571,6 +730,7 @@ async function createEmployee() {
   const pwd = document.getElementById('newEmpPwd')?.value;
   const dept = document.getElementById('newEmpDept')?.value.trim();
   const joinDate = document.getElementById('newEmpJoin')?.value;
+  const role = document.getElementById('newEmpRole')?.value || 'employee';
   const errEl = document.getElementById('addEmpError');
 
   if (!name || !email || !pwd) { showError(errEl, '請填寫姓名、Email 與密碼'); return; }
@@ -580,7 +740,7 @@ async function createEmployee() {
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, pwd);
     await setDoc(doc(db, 'users', cred.user.uid), {
-      name, email, dept: dept || '', role: 'employee',
+      name, email, dept: dept || '', role,
       joinDate: joinDate || '', active: true, createdAt: serverTimestamp()
     });
     showToast(`員工 ${name} 新增成功`, 'success');
@@ -789,7 +949,11 @@ function startWorkReminder() {
     if (!hasClockedIn || hasClockedOut) return;
 
     const now = new Date();
-    const [endH, endM] = sysSettings.workEnd.split(':').map(Number);
+    const role = currentUserData?.role || 'employee';
+    const shift = getCurrentShiftInfo(role);
+    if (shift.isHoliday || !shift.end) return;
+
+    const [endH, endM] = shift.end.split(':').map(Number);
     const workEndMins = endH * 60 + endM;
     const nowMins = now.getHours() * 60 + now.getMinutes();
 
