@@ -48,6 +48,12 @@ let currentUser = null;
 let currentUserData = null;
 let currentPosition = null;
 let clockTimer = null;
+let gpsWatchId = null;          // GPS 持續監控 ID
+let autoClockOutDone = false;   // 避免重複自動打卡
+let reminderTimer = null;       // 下班提醒計時器
+let reminderCount = 0;          // 提醒次數計數
+let hasClockedIn = false;       // 今日是否已上班打卡
+let hasClockedOut = false;      // 今日是否已下班打卡
 let sysSettings = {
   locationName: '公司總部',
   lat: 24.1362445,
@@ -197,6 +203,8 @@ async function handleLogin() {
 
 async function handleLogout() {
   if (clockTimer) clearInterval(clockTimer);
+  stopGPSWatch();
+  stopWorkReminder();
   try { await signOut(auth); } catch (e) { console.error(e); }
 }
 
@@ -241,8 +249,11 @@ function initEmployee() {
   document.getElementById('userAvatarEmp').textContent = (currentUserData.name || '員')[0];
   startClock();
   getGPS();
+  startGPSWatch();     // 啟動 GPS 持續監控
+  startWorkReminder(); // 啟動下班提醒
   loadTodayStatus();
   populateMonthSel('myMonthSel');
+  requestNotificationPermission(); // 申請推播通知權限
 }
 
 function startClock() {
@@ -304,6 +315,7 @@ async function loadTodayStatus() {
     const summary = document.getElementById('todaySummary');
 
     if (!rec) {
+      hasClockedIn = false; hasClockedOut = false;
       if (icon) icon.textContent = '📋';
       if (text) text.textContent = '今日尚未打卡';
       if (sub) sub.textContent = `正常上班時間：${sysSettings.workStart}`;
@@ -311,6 +323,7 @@ async function loadTodayStatus() {
       if (btnOut) btnOut.disabled = true;
       if (summary) summary.style.display = 'none';
     } else if (rec.clockIn && !rec.clockOut) {
+      hasClockedIn = true; hasClockedOut = false;
       if (icon) icon.textContent = '✅';
       if (text) text.textContent = '已上班打卡';
       if (sub) sub.textContent = `上班時間：${rec.clockIn}`;
@@ -318,6 +331,8 @@ async function loadTodayStatus() {
       if (btnOut) btnOut.disabled = false;
       showSummary(rec.clockIn, null);
     } else if (rec.clockIn && rec.clockOut) {
+      hasClockedIn = true; hasClockedOut = true;
+      autoClockOutDone = true;
       if (icon) icon.textContent = '🏠';
       if (text) text.textContent = '今日已完成打卡';
       if (sub) sub.textContent = `工作時數：${calcHoursStr(rec.clockIn, rec.clockOut)}`;
@@ -372,12 +387,15 @@ async function doClock(type) {
         lng: currentPosition ? currentPosition.longitude : null,
         createdAt: serverTimestamp()
       });
+      hasClockedIn = true; hasClockedOut = false;
       showToast(`上班打卡成功！${timeStr}`, 'success');
     } else {
       await updateDoc(doc(db, 'records', recId), {
         clockOut: timeStr,
         clockOutAt: serverTimestamp()
       });
+      hasClockedOut = true; autoClockOutDone = true;
+      stopWorkReminder();
       showToast(`下班打卡成功！${timeStr}`, 'success');
     }
     loadTodayStatus();
@@ -651,6 +669,189 @@ async function exportCSV() {
 }
 
 window.exportCSV = exportCSV;
+
+// ============================================================
+// GPS 持續監控 — 離開範圍自動打卡下班
+// ============================================================
+function startGPSWatch() {
+  if (!navigator.geolocation) return;
+  stopGPSWatch();
+  autoClockOutDone = false;
+
+  gpsWatchId = navigator.geolocation.watchPosition(
+    async (pos) => {
+      currentPosition = pos.coords;
+      const dist = calcDist(pos.coords.latitude, pos.coords.longitude, sysSettings.lat, sysSettings.lng);
+      const gpsText = document.getElementById('gpsText');
+      const gpsIcon = document.getElementById('gpsIcon');
+
+      if (dist <= sysSettings.radius) {
+        if (gpsText) { gpsText.textContent = `位置確認：${sysSettings.locationName}（${Math.round(dist)} 公尺）`; gpsText.style.color = '#2ec4b6'; }
+        if (gpsIcon) gpsIcon.textContent = '✅';
+      } else {
+        if (gpsText) { gpsText.textContent = `已離開工作地點（${Math.round(dist)} 公尺）`; gpsText.style.color = '#e63946'; }
+        if (gpsIcon) gpsIcon.textContent = '🚨';
+
+        // 離開範圍且已上班且尚未下班 → 自動打卡下班
+        if (hasClockedIn && !hasClockedOut && !autoClockOutDone && currentUser) {
+          autoClockOutDone = true;
+          await autoClockOut();
+        }
+      }
+    },
+    (err) => {
+      console.warn('GPS 監控錯誤:', err.message);
+    },
+    { enableHighAccuracy: true, maximumAge: 30000, timeout: 20000 }
+  );
+}
+
+function stopGPSWatch() {
+  if (gpsWatchId !== null) {
+    navigator.geolocation.clearWatch(gpsWatchId);
+    gpsWatchId = null;
+  }
+}
+
+async function autoClockOut() {
+  if (!currentUser) return;
+  const now = new Date();
+  const today = fmtDate(now);
+  const timeStr = now.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit' });
+  const recId = `${today}_${currentUser.uid}`;
+  try {
+    await updateDoc(doc(db, 'records', recId), {
+      clockOut: timeStr,
+      clockOutAt: serverTimestamp(),
+      note: '離開工作地點自動打卡'
+    });
+    hasClockedOut = true;
+    stopWorkReminder();
+    loadTodayStatus();
+    // 顯示提醒視窗
+    showAutoClockOutAlert(timeStr);
+    // 發送推播通知
+    sendNotification('自動下班打卡', `您已離開工作地點，系統已自動記錄下班時間 ${timeStr}`);
+  } catch (e) {
+    console.error('自動下班打卡失敗:', e);
+    autoClockOutDone = false; // 允許重試
+  }
+}
+
+function showAutoClockOutAlert(timeStr) {
+  // 建立浮動提醒卡片
+  const existing = document.getElementById('autoClockOutAlert');
+  if (existing) existing.remove();
+
+  const div = document.createElement('div');
+  div.id = 'autoClockOutAlert';
+  div.style.cssText = `
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: #1a1a2e; border: 2px solid #2ec4b6; border-radius: 16px;
+    padding: 24px 28px; z-index: 9999; text-align: center;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5); max-width: 320px; width: 90%;
+  `;
+  div.innerHTML = `
+    <div style="font-size:40px;margin-bottom:12px">📍</div>
+    <div style="color:#2ec4b6;font-size:18px;font-weight:bold;margin-bottom:8px">自動下班打卡</div>
+    <div style="color:#e0e0e0;font-size:14px;margin-bottom:16px">您已離開工作地點<br>系統已自動記錄下班時間<br><strong style="color:#fff;font-size:20px">${timeStr}</strong></div>
+    <button onclick="document.getElementById('autoClockOutAlert').remove()" style="
+      background:#2ec4b6;color:#fff;border:none;border-radius:8px;
+      padding:10px 24px;font-size:15px;cursor:pointer;width:100%
+    ">確認</button>
+  `;
+  document.body.appendChild(div);
+  // 10 秒後自動關閉
+  setTimeout(() => { if (div.parentNode) div.remove(); }, 10000);
+}
+
+// ============================================================
+// 下班提醒功能
+// ============================================================
+function requestNotificationPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+function sendNotification(title, body) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification(title, { body, icon: '⏰' });
+  }
+}
+
+function startWorkReminder() {
+  stopWorkReminder();
+  reminderCount = 0;
+
+  // 每分鐘檢查一次是否需要提醒
+  reminderTimer = setInterval(() => {
+    if (!hasClockedIn || hasClockedOut) return;
+
+    const now = new Date();
+    const [endH, endM] = sysSettings.workEnd.split(':').map(Number);
+    const workEndMins = endH * 60 + endM;
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+
+    // 到達下班時間後才提醒
+    if (nowMins < workEndMins) return;
+
+    const overMins = nowMins - workEndMins;
+
+    // 第一次提醒：到達下班時間時
+    // 後續提醒：每超過 15 分鐘提醒一次
+    const shouldRemindAt = reminderCount === 0 ? 0 : reminderCount * 15;
+    if (overMins >= shouldRemindAt) {
+      reminderCount++;
+      const msg = reminderCount === 1
+        ? `現在是 ${sysSettings.workEnd} 下班時間，請記得打卡下班！`
+        : `您已超過下班時間 ${overMins} 分鐘，尚未打卡下班！`;
+
+      // 展示提醒 Toast
+      showToast(msg, 'warning');
+      // 發送推播通知
+      sendNotification('下班提醒', msg);
+      // 展示提醒卡片
+      showReminderCard(msg);
+    }
+  }, 60000); // 每分鐘檢查
+}
+
+function stopWorkReminder() {
+  if (reminderTimer) {
+    clearInterval(reminderTimer);
+    reminderTimer = null;
+  }
+  reminderCount = 0;
+}
+
+function showReminderCard(msg) {
+  const existing = document.getElementById('reminderCard');
+  if (existing) existing.remove();
+
+  const div = document.createElement('div');
+  div.id = 'reminderCard';
+  div.style.cssText = `
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: #1a1a2e; border: 2px solid #f77f00; border-radius: 16px;
+    padding: 24px 28px; z-index: 9999; text-align: center;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5); max-width: 320px; width: 90%;
+  `;
+  div.innerHTML = `
+    <div style="font-size:40px;margin-bottom:12px">⏰</div>
+    <div style="color:#f77f00;font-size:18px;font-weight:bold;margin-bottom:8px">下班打卡提醒</div>
+    <div style="color:#e0e0e0;font-size:14px;margin-bottom:16px">${msg}</div>
+    <button onclick="doClock('out');document.getElementById('reminderCard').remove()" style="
+      background:#f77f00;color:#fff;border:none;border-radius:8px;
+      padding:10px 24px;font-size:15px;cursor:pointer;width:100%;margin-bottom:8px
+    ">立刻打卡下班</button>
+    <button onclick="document.getElementById('reminderCard').remove()" style="
+      background:transparent;color:#aaa;border:1px solid #444;border-radius:8px;
+      padding:8px 24px;font-size:13px;cursor:pointer;width:100%
+    ">稍後再說</button>
+  `;
+  document.body.appendChild(div);
+}
 
 // ============================================================
 // Tab 切換
