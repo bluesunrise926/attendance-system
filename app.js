@@ -30,13 +30,28 @@ let sysSettings = {
 };
 
 // ============================================================
-// 初始化：監聽登入狀態
+// 初始化：監聽登入狀態（含超時保護）
 // ============================================================
+
+// 超時保護：若 10 秒內 Firebase 未回應，直接跳到登入頁
+const authTimeout = setTimeout(() => {
+  const loading = document.getElementById('loadingScreen');
+  if (loading && loading.classList.contains('active')) {
+    hideScreen('loadingScreen');
+    showScreen('loginScreen');
+  }
+}, 10000);
+
 onAuthStateChanged(auth, async (user) => {
+  clearTimeout(authTimeout);
   if (user) {
     currentUser = user;
-    await loadUserData(user.uid);
-    await loadSettings();
+    try {
+      await loadUserData(user.uid);
+      await loadSettings();
+    } catch (e) {
+      console.warn('載入資料失敗，使用預設值', e);
+    }
     hideScreen('loadingScreen');
     if (currentUserData && currentUserData.role === 'admin') {
       showScreen('adminScreen');
