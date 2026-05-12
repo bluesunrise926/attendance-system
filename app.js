@@ -50,8 +50,8 @@ let currentPosition = null;
 let clockTimer = null;
 let sysSettings = {
   locationName: '公司總部',
-  lat: 25.033964,
-  lng: 121.564468,
+  lat: 24.1362445,
+  lng: 120.6527999,
   radius: 200,
   workStart: '09:00',
   workEnd: '18:00'
