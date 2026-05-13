@@ -25,12 +25,10 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
 /* 畫面切換 */
 .screen { display: none; min-height: 100vh; }
 .screen.active { display: block; }
-#loadingScreen.active { display: flex; align-items: center; justify-content: center; }
-#loginScreen.active { display: flex; align-items: center; justify-content: center; }
 #adminScreen.active { display: flex; }
 
 /* 載入畫面 */
-#loadingScreen { background: var(--dark); }
+#loadingScreen { background: var(--dark); display: flex; align-items: center; justify-content: center; }
 .loading-container { text-align: center; color: white; }
 .loading-logo { font-size: 64px; margin-bottom: 16px; }
 .loading-text { font-size: 22px; font-weight: 700; margin-bottom: 24px; }
@@ -39,7 +37,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* 登入畫面 */
-#loginScreen { background: linear-gradient(135deg, var(--dark) 0%, var(--dark2) 100%); }
+#loginScreen { background: linear-gradient(135deg, var(--dark) 0%, var(--dark2) 100%); display: flex; align-items: center; justify-content: center; }
 .login-container { width: 100%; max-width: 400px; padding: 24px; }
 .logo { text-align: center; margin-bottom: 32px; color: white; }
 .logo-icon { font-size: 56px; margin-bottom: 12px; }
@@ -73,6 +71,16 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
 
 /* 錯誤訊息 */
 .error-msg { background: #fff0f0; color: var(--danger); padding: 10px 14px; border-radius: 8px; font-size: 13px; border: 1px solid #ffc9c9; margin-bottom: 12px; }
+
+/* 記憶帳號 */
+.remember-row { display: flex; align-items: center; margin-bottom: 12px; }
+.remember-label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #555; cursor: pointer; user-select: none; }
+.remember-label input[type='checkbox'] { width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer; }
+
+/* 自動登出倒數提示 */
+#autoLogoutBar { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(230,57,70,0.92); color: white; text-align: center; padding: 10px 16px; font-size: 14px; font-weight: 600; z-index: 9999; display: none; backdrop-filter: blur(6px); }
+#autoLogoutBar.show { display: block; animation: slideUp 0.3s ease; }
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 
 /* 員工打卡畫面 */
 #employeeScreen { background: linear-gradient(160deg, var(--dark) 0%, var(--dark2) 40%, #0f3460 100%); color: white; }
