@@ -25,10 +25,12 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
 /* 畫面切換 */
 .screen { display: none; min-height: 100vh; }
 .screen.active { display: block; }
+#loadingScreen.active { display: flex; align-items: center; justify-content: center; }
+#loginScreen.active { display: flex; align-items: center; justify-content: center; }
 #adminScreen.active { display: flex; }
 
 /* 載入畫面 */
-#loadingScreen { background: var(--dark); display: flex; align-items: center; justify-content: center; }
+#loadingScreen { background: var(--dark); }
 .loading-container { text-align: center; color: white; }
 .loading-logo { font-size: 64px; margin-bottom: 16px; }
 .loading-text { font-size: 22px; font-weight: 700; margin-bottom: 24px; }
@@ -37,7 +39,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* 登入畫面 */
-#loginScreen { background: linear-gradient(135deg, var(--dark) 0%, var(--dark2) 100%); display: flex; align-items: center; justify-content: center; }
+#loginScreen { background: linear-gradient(135deg, var(--dark) 0%, var(--dark2) 100%); }
 .login-container { width: 100%; max-width: 400px; padding: 24px; }
 .logo { text-align: center; margin-bottom: 32px; color: white; }
 .logo-icon { font-size: 56px; margin-bottom: 12px; }
