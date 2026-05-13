@@ -1,6 +1,6 @@
 // Service Worker — 員工打卡系統 PWA
-// v3：強制清除舊快取，改用網路優先策略確保每次都取得最新版本
-const CACHE_NAME = 'attendance-v3';
+// v4：改用 compat SDK，強制清除所有舊快取
+const CACHE_NAME = 'attendance-v4';
 const CACHE_FILES = ['/', '/index.html', '/style.css', '/manifest.json'];
 
 self.addEventListener('install', e => {
@@ -23,7 +23,7 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Firebase、googleapis 請求完全不走快取
+  // Firebase、googleapis、gstatic 請求完全不走快取
   if (e.request.url.includes('firebase') ||
       e.request.url.includes('googleapis') ||
       e.request.url.includes('gstatic')) {
