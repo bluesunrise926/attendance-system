@@ -8,7 +8,24 @@
   <meta name="theme-color" content="#1a1a2e">
   <title>員工打卡系統</title>
   <link rel="stylesheet" href="style.css">
-  <script type="module" src="app.js"></script>
+
+  <!-- Firebase compat SDK（非 ESM，不依賴 import/module） -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+  <!-- 超時保護：若 3 秒後仍在載入畫面，強制跳到登入頁（不依賴 app.js） -->
+  <script>
+    window._loadTimeout = setTimeout(function() {
+      var ls = document.getElementById('loadingScreen');
+      var login = document.getElementById('loginScreen');
+      if (ls && ls.classList.contains('active')) {
+        ls.classList.remove('active');
+        if (login) login.classList.add('active');
+        console.warn('[超時保護] 載入超過 3 秒，強制跳到登入頁');
+      }
+    }, 3000);
+  </script>
 </head>
 <body>
   <!-- 載入畫面 -->
@@ -370,5 +387,8 @@
 
   <!-- 自動登出倒數提示列 -->
   <div id="autoLogoutBar">您已閒置 <span id="autoLogoutCountdown">60</span> 秒，即將自動登出…… <button onclick="resetIdleTimer()" style="margin-left:12px;background:white;color:#e63946;border:none;padding:4px 12px;border-radius:6px;font-weight:700;cursor:pointer;">我還在！</button></div>
+
+  <!-- 主程式（compat 版，不使用 type=module） -->
+  <script src="app.js"></script>
 </body>
 </html>
