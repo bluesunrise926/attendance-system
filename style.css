@@ -308,3 +308,15 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
   .filter-row { flex-direction: column; }
   .filter-sel { width: 100%; }
 }
+
+/* GPS 授權請求橫幅 */
+.gps-banner { position: fixed; top: 0; left: 0; right: 0; background: linear-gradient(135deg, #e63946, #c1121f); color: white; display: flex; align-items: center; gap: 12px; padding: 12px 16px; z-index: 9998; box-shadow: 0 2px 12px rgba(0,0,0,0.3); }
+.gps-banner-icon { font-size: 24px; flex-shrink: 0; }
+.gps-banner-text { flex: 1; }
+.gps-banner-text strong { display: block; font-size: 14px; margin-bottom: 2px; }
+.gps-banner-text p { font-size: 12px; opacity: 0.85; margin: 0; }
+.gps-banner-btn { background: white; color: #e63946; border: none; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+.gps-banner-close { background: transparent; border: 1px solid rgba(255,255,255,0.4); color: white; border-radius: 6px; padding: 6px 10px; font-size: 16px; cursor: pointer; flex-shrink: 0; }
+
+/* 已下班標籤（藍綠色，區別於 badge-blue） */
+.badge-teal { background: #d1f0ee; color: #0e6b65; }
