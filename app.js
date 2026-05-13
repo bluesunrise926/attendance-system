@@ -511,13 +511,17 @@ function doClock(type) {
   var timeStr = now.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit' });
   var recId  = today + '_' + currentUser.uid;
 
-  if (currentPosition) {
-    var dist = calcDist(currentPosition.latitude, currentPosition.longitude, sysSettings.lat, sysSettings.lng);
-    if (dist > sysSettings.radius) {
-      if (!confirm('您目前距工作地點 ' + Math.round(dist) + ' 公尺，超出允許範圍（' + sysSettings.radius + ' 公尺）。\n確定要繼續打卡嗎？')) return;
-    }
-  } else {
-    if (!confirm('無法取得 GPS 位置，確定要繼續打卡嗎？\n（此次打卡將標記為無位置資訊）')) return;
+  // 強制 GPS 驗證：必須在指定範圍內才能打卡，不允許繞過
+  if (!currentPosition) {
+    showToast('無法取得 GPS 位置，請開啟手機定位權限後再試', 'error');
+    getGPS();
+    return;
+  }
+
+  var dist = calcDist(currentPosition.latitude, currentPosition.longitude, sysSettings.lat, sysSettings.lng);
+  if (dist > sysSettings.radius) {
+    showToast('⛔ 位置不符！距工作地點 ' + Math.round(dist) + ' 公尺，需在 ' + sysSettings.radius + ' 公尺範圍內才可打卡', 'error');
+    return;
   }
 
   var btn = type === 'in' ? document.getElementById('btnIn') : document.getElementById('btnOut');
