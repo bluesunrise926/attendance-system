@@ -22,8 +22,9 @@ var firebaseConfig = {
 if (!firebase.apps.length) {
   firebase.initializeApp(firebaseConfig);
 }
-var db   = firebase.firestore();
-var auth = firebase.auth();
+var db      = firebase.firestore();
+var auth    = firebase.auth();
+var storage = firebase.storage();
 
 // ============================================================
 // 全域狀態
@@ -97,8 +98,36 @@ function showRegisterScreen() {
   });
   document.getElementById('regJoinDate').value = fmtDate(new Date());
   document.getElementById('regError').style.display = 'none';
+  document.getElementById('regProgress').style.display = 'none';
+  // 清空身分證預覽
+  ['idFrontPreview','idBackPreview'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.innerHTML = '<span class="id-upload-icon">📷</span><span>點擊上傳照片</span>';
+    el.classList.remove('has-image');
+  });
+  ['regIdFront','regIdBack'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
   showScreen('registerScreen');
 }
+
+// 身分證預覽
+function previewId(inputId, previewId, boxId) {
+  var input   = document.getElementById(inputId);
+  var preview = document.getElementById(previewId);
+  var box     = document.getElementById(boxId);
+  if (!input.files || !input.files[0]) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    preview.innerHTML = '<img src="' + e.target.result + '" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">';
+    preview.classList.add('has-image');
+    box.style.borderColor = 'var(--success)';
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+
+window.previewId = previewId;
 
 window.showLoginScreen    = showLoginScreen;
 window.showRegisterScreen = showRegisterScreen;
@@ -222,47 +251,90 @@ function handleLogin() {
 // 員工自助註冊
 // ============================================================
 function handleRegister() {
-  var name     = document.getElementById('regName').value.trim();
-  var email    = document.getElementById('regEmail').value.trim();
-  var pwd      = document.getElementById('regPwd').value;
-  var pwd2     = document.getElementById('regPwd2').value;
-  var dept     = document.getElementById('regDept').value.trim();
-  var joinDate = document.getElementById('regJoinDate').value;
-  var phone    = document.getElementById('regPhone').value.trim();
-  var errEl    = document.getElementById('regError');
-  var btn      = document.getElementById('regBtn');
+  var name        = document.getElementById('regName').value.trim();
+  var phone       = document.getElementById('regPhone').value.trim();
+  var email       = document.getElementById('regEmail').value.trim();
+  var pwd         = document.getElementById('regPwd').value;
+  var pwd2        = document.getElementById('regPwd2').value;
+  var dept        = document.getElementById('regDept').value.trim();
+  var joinDate    = document.getElementById('regJoinDate').value;
+  var idFrontFile = document.getElementById('regIdFront').files[0];
+  var idBackFile  = document.getElementById('regIdBack').files[0];
+  var errEl       = document.getElementById('regError');
+  var btn         = document.getElementById('regBtn');
 
   // 驗證
-  if (!name)     { showError(errEl, '請填寫姓名'); return; }
-  if (!email)    { showError(errEl, '請填寫電子郵件'); return; }
-  if (!pwd)      { showError(errEl, '請設定密碼'); return; }
+  if (!name)          { showError(errEl, '請填寫姓名'); return; }
+  if (!phone)         { showError(errEl, '請填寫電話號碼'); return; }
+  if (!email)         { showError(errEl, '請填寫電子郵件'); return; }
+  if (!pwd)           { showError(errEl, '請設定密碼'); return; }
   if (pwd.length < 6) { showError(errEl, '密碼至少需要 6 個字元'); return; }
   if (pwd !== pwd2)   { showError(errEl, '兩次密碼輸入不一致'); return; }
-  if (!joinDate) { showError(errEl, '請填寫到職日期'); return; }
+  if (!joinDate)      { showError(errEl, '請填寫到職日期'); return; }
+  if (!idFrontFile)   { showError(errEl, '請上傳身分證正面照片'); return; }
+  if (!idBackFile)    { showError(errEl, '請上傳身分證背面照片'); return; }
 
   errEl.style.display = 'none';
   btn.textContent = '註冊中...';
   btn.disabled    = true;
 
+  var progressEl  = document.getElementById('regProgress');
+  var progressBar = document.getElementById('regProgressBar');
+  var progressTxt = document.getElementById('regProgressText');
+  progressEl.style.display = 'block';
+
   var newUid = null;
+
+  // Step 1: 建立 Firebase Auth 帳號
+  progressBar.style.width = '10%';
+  progressTxt.textContent = '建立帳號中...';
 
   auth.createUserWithEmailAndPassword(email, pwd)
     .then(function(cred) {
       newUid = cred.user.uid;
+      progressBar.style.width = '25%';
+      progressTxt.textContent = '上傳身分證正面...';
+
+      // Step 2: 上傳身分證正面
+      var frontRef = storage.ref('id_cards/' + newUid + '/front');
+      return frontRef.put(idFrontFile).then(function() {
+        return frontRef.getDownloadURL();
+      });
+    })
+    .then(function(frontUrl) {
+      progressBar.style.width = '55%';
+      progressTxt.textContent = '上傳身分證背面...';
+
+      // Step 3: 上傳身分證背面
+      var backRef = storage.ref('id_cards/' + newUid + '/back');
+      return backRef.put(idBackFile).then(function() {
+        return backRef.getDownloadURL();
+      }).then(function(backUrl) {
+        return { frontUrl: frontUrl, backUrl: backUrl };
+      });
+    })
+    .then(function(urls) {
+      progressBar.style.width = '80%';
+      progressTxt.textContent = '儲存資料...';
+
+      // Step 4: 儲存 Firestore
       return db.collection('users').doc(newUid).set({
-        name:      name,
-        email:     email,
-        dept:      dept,
-        joinDate:  joinDate,
-        leaveDate: '',
-        phone:     phone,
-        role:      'employee',
-        active:    true,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        name:       name,
+        email:      email,
+        dept:       dept,
+        joinDate:   joinDate,
+        leaveDate:  '',
+        phone:      phone,
+        idFrontUrl: urls.frontUrl,
+        idBackUrl:  urls.backUrl,
+        role:       'employee',
+        active:     true,
+        createdAt:  firebase.firestore.FieldValue.serverTimestamp()
       });
     })
     .then(function() {
-      // 註冊成功後直接登入
+      progressBar.style.width = '95%';
+      progressTxt.textContent = '載入系統...';
       currentUser = auth.currentUser;
       return loadUserData(newUid);
     })
@@ -270,8 +342,10 @@ function handleRegister() {
       return loadSettings();
     })
     .then(function() {
+      progressBar.style.width = '100%';
       btn.textContent = '完成註冊並登入';
       btn.disabled    = false;
+      progressEl.style.display = 'none';
       showToast('註冊成功！歡迎 ' + name, 'success');
       showScreen('employeeScreen');
       initEmployee();
@@ -280,13 +354,19 @@ function handleRegister() {
     .catch(function(e) {
       btn.textContent = '完成註冊並登入';
       btn.disabled    = false;
-      var msg = e.code === 'auth/email-already-in-use'
-        ? '此電子郵件已被使用，請直接登入或使用其他信箱'
-        : e.code === 'auth/invalid-email'
-        ? '電子郵件格式不正確'
-        : e.code === 'auth/weak-password'
-        ? '密碼強度不足，請使用更複雜的密碼'
-        : '註冊失敗：' + e.message;
+      progressEl.style.display = 'none';
+      var msg;
+      if (e.code === 'auth/email-already-in-use') {
+        msg = '此電子郵件已有帳號。如果您已完成過註冊，請點「返回登入」使用此信箱登入；如果是第一次使用，請換一個電子郵件重新填寫。';
+      } else if (e.code === 'auth/invalid-email') {
+        msg = '電子郵件格式不正確';
+      } else if (e.code === 'auth/weak-password') {
+        msg = '密碼強度不足，請使用更複雜的密碼';
+      } else if (e.code === 'storage/unauthorized') {
+        msg = '身分證上傳失敗（儲存權限不足），請聯絡管理員設定。';
+      } else {
+        msg = '註冊失敗：' + (e.message || e.code);
+      }
       showError(errEl, msg);
     });
 }
