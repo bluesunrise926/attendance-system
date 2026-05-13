@@ -37,7 +37,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* 登入畫面 */
-#loginScreen { background: linear-gradient(135deg, var(--dark) 0%, var(--dark2) 100%); align-items: center; justify-content: center; }
+#loginScreen, #registerScreen { background: linear-gradient(135deg, var(--dark) 0%, var(--dark2) 100%); align-items: center; justify-content: center; }
 .login-container { width: 100%; max-width: 400px; padding: 24px; }
 .logo { text-align: center; margin-bottom: 32px; color: white; }
 .logo-icon { font-size: 56px; margin-bottom: 12px; }
@@ -71,6 +71,16 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
 
 /* 錯誤訊息 */
 .error-msg { background: #fff0f0; color: var(--danger); padding: 10px 14px; border-radius: 8px; font-size: 13px; border: 1px solid #ffc9c9; margin-bottom: 12px; }
+
+/* 註冊連結列 */
+.register-link-row { text-align: center; margin-top: 12px; font-size: 13px; color: #888; }
+.btn-link { background: none; border: none; color: var(--primary); font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: underline; padding: 0; }
+.btn-link:hover { color: var(--primary-dark); }
+
+/* 員工管理操作列 */
+.emp-mgmt-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.emp-mgmt-hint { font-size: 13px; color: var(--text-light); }
+.emp-actions { display: flex; gap: 6px; }
 
 /* 記憶帳號 */
 .remember-row { display: flex; align-items: center; margin-bottom: 12px; }
