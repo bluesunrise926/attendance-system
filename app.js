@@ -55,6 +55,13 @@ var sysSettings = {
 // 目前員工選擇的班別索引
 var currentShiftIndex = 0;
 
+// 下班監控計時器
+var shiftEndTimer        = null;  // 每分鐘監控下班時間
+var autoClockOutTimer    = null;  // 15 分鐘後自動補打卡
+var overtimeNotifUnsub   = null;  // 後台通知監聽取消函數
+var shiftEndAlerted      = {};    // 已彈出通知的班別 key，避免重複彈出
+var pendingAutoClockData = null;  // 待執行的自動補打卡資料
+
 // ============================================================
 // 頁面載入
 // ============================================================
@@ -318,7 +325,12 @@ window.handleRegister = handleRegister;
 
 function handleLogout() {
   stopIdleWatch();
-  if (clockTimer) clearInterval(clockTimer);
+  if (clockTimer)         clearInterval(clockTimer);
+  if (shiftEndTimer)      clearInterval(shiftEndTimer);
+  if (autoClockOutTimer)  clearTimeout(autoClockOutTimer);
+  if (overtimeNotifUnsub) { overtimeNotifUnsub(); overtimeNotifUnsub = null; }
+  shiftEndAlerted      = {};
+  pendingAutoClockData = null;
   currentUser     = null;
   currentUserData = null;
   auth.signOut().then(function() {
@@ -367,6 +379,8 @@ function initEmployee() {
   initShiftSelector();
   loadTodayStatus();
   populateMonthSel('myMonthSel');
+  // 啟動下班時間監控
+  startShiftEndMonitor();
 }
 
 // 初始化班別選擇器
@@ -447,11 +461,9 @@ function getGPS(onSuccess) {
   navigator.geolocation.getCurrentPosition(
     function(pos) {
       currentPosition = pos.coords;
-      // GPS 授權成功，解除打卡按鈕的 GPS 封鎖
+      // GPS 授權成功，解除上班按鈕的 GPS 封鎖
       var btnIn  = document.getElementById('btnIn');
-      var btnOut = document.getElementById('btnOut');
       if (btnIn  && btnIn._gpsBlocked)  { btnIn.disabled  = false; btnIn._gpsBlocked  = false; }
-      if (btnOut && btnOut._gpsBlocked) { btnOut.disabled = false; btnOut._gpsBlocked = false; }
       var dist = calcDist(pos.coords.latitude, pos.coords.longitude, sysSettings.lat, sysSettings.lng);
       if (dist <= sysSettings.radius) {
         gpsText.textContent = '✅ 位置確認：' + sysSettings.locationName + '（' + Math.round(dist) + ' 公尺）';
@@ -466,11 +478,9 @@ function getGPS(onSuccess) {
     },
     function(err) {
       currentPosition = null;
-      // 拒絕授權時禁用打卡按鈕，防止繞過 GPS 打卡
+      // 拒絕授權時禁用《上班》按鈕，下班打卡不受 GPS 封鎖（防止員工忘記下班打卡）
       var btnIn  = document.getElementById('btnIn');
-      var btnOut = document.getElementById('btnOut');
       if (btnIn  && !btnIn.disabled)  { btnIn._gpsBlocked  = true; btnIn.disabled  = true; }
-      if (btnOut && !btnOut.disabled) { btnOut._gpsBlocked = true; btnOut.disabled = true; }
       if (err.code === 1) {
         // 使用者拒絕授權
         gpsText.innerHTML = '⛔ 定位權限未開啟，<strong style="color:#fff;text-decoration:underline;cursor:pointer;" onclick="requestGPSPermission()">點此重新授權</strong>';
@@ -504,11 +514,9 @@ function requestGPSPermission() {
     function() {
       gpsText.textContent = '⛔ 請至手機設定 → 隱私權 → 定位服務，開啟瀏覽器定位權限';
       gpsText.style.color = '#e63946';
-      // 再次拒絕時也確保按鈕被禁用
+      // 再次拒絕時也確保上班按鈕被禁用（下班不封鎖）
       var btnIn  = document.getElementById('btnIn');
-      var btnOut = document.getElementById('btnOut');
       if (btnIn  && !btnIn.disabled)  { btnIn._gpsBlocked  = true; btnIn.disabled  = true; }
-      if (btnOut && !btnOut.disabled) { btnOut._gpsBlocked = true; btnOut.disabled = true; }
     },
     { enableHighAccuracy: true, timeout: 10000 }
   );
@@ -544,17 +552,19 @@ function loadTodayStatus() {
       icon.textContent = '📋';
       text.textContent = '本班尚未打卡';
       sub.textContent  = curShift.name + '（' + curShift.start + ' – ' + curShift.end + '）';
-      // 如果 GPS 封鎖中，保持禁用狀態
+      // 上班按鈕：如果 GPS 封鎖中則保持禁用
       if (!btnIn._gpsBlocked)  btnIn.disabled  = false;
-      if (!btnOut._gpsBlocked) btnOut.disabled = true;
+      // 下班按鈕：尚未上班時一律禁用（不受 GPS 封鎖影響）
+      btnOut.disabled = true;
       summary.style.display = 'none';
     } else if (rec.clockIn && !rec.clockOut) {
       icon.textContent = '✅';
       text.textContent = '已上班打卡';
       sub.textContent  = curShift.name + ' 上班：' + rec.clockIn;
-      // 已上班時，不管 GPS 狀態，上班按鈕一律禁用
+      // 已上班時，上班按鈕一律禁用
       btnIn.disabled = true;
-      if (!btnOut._gpsBlocked) btnOut.disabled = false;
+      // 下班按鈕：不受 GPS 封鎖影響，直接啟用
+      btnOut.disabled = false;
       showSummary(rec.clockIn, null);
     } else if (rec.clockIn && rec.clockOut) {
       icon.textContent = '🏠';
@@ -580,20 +590,20 @@ function doClock(type) {
   // 每個班別獨立記錄：日期_員工UID_班別索引
   var recId   = today + '_' + currentUser.uid + '_' + currentShiftIndex;
 
-  // 若尚未取得 GPS，先強制請求授權再打卡
-  if (!currentPosition) {
-    showToast('請先允許定位授權才能打卡', 'error');
-    showGPSPermissionBanner();
-    // 嘗試重新取得，取得後自動繼續打卡
-    getGPS(function() { doClock(type); });
-    return;
-  }
-
-  // 強制範圍驗證
-  var dist = calcDist(currentPosition.latitude, currentPosition.longitude, sysSettings.lat, sysSettings.lng);
-  if (dist > sysSettings.radius) {
-    showToast('⛔ 位置不符！距工作地點 ' + Math.round(dist) + ' 公尺，需在 ' + sysSettings.radius + ' 公尺範圍內才可打卡', 'error');
-    return;
+  // 下班打卡不需要 GPS（防止員工忘記打卡）
+  if (type !== 'out') {
+    // 上班打卡才需要 GPS
+    if (!currentPosition) {
+      showToast('請先允許定位授權才能打卡', 'error');
+      showGPSPermissionBanner();
+      getGPS(function() { doClock(type); });
+      return;
+    }
+    var dist = calcDist(currentPosition.latitude, currentPosition.longitude, sysSettings.lat, sysSettings.lng);
+    if (dist > sysSettings.radius) {
+      showToast('⛔ 位置不符！距工作地點 ' + Math.round(dist) + ' 公尺，需在 ' + sysSettings.radius + ' 公尺範圍內才可打卡', 'error');
+      return;
+    }
   }
 
   var btn = type === 'in' ? document.getElementById('btnIn') : document.getElementById('btnOut');
@@ -629,6 +639,12 @@ function doClock(type) {
 
   promise.then(function() {
     showToast(curShift.name + ' ' + (type === 'in' ? '上班' : '下班') + '打卡成功！' + timeStr, 'success');
+    // 下班打卡成功：清除自動補打卡計時器並關閉加班彈窗
+    if (type === 'out') {
+      if (autoClockOutTimer) { clearTimeout(autoClockOutTimer); autoClockOutTimer = null; }
+      pendingAutoClockData = null;
+      closeOvertimeDialog();
+    }
     loadTodayStatus();
   }).catch(function(e) {
     showToast('打卡失敗，請確認網路連線', 'error');
@@ -639,6 +655,260 @@ function doClock(type) {
 }
 
 window.doClock = doClock;
+
+// ============================================================
+// 下班時間監控與加班確認
+// ============================================================
+
+// 啟動下班監控（每分鐘檢查一次）
+function startShiftEndMonitor() {
+  if (shiftEndTimer) clearInterval(shiftEndTimer);
+  shiftEndAlerted = {};
+  checkShiftEnd(); // 立即執行一次
+  shiftEndTimer = setInterval(checkShiftEnd, 60000);
+}
+
+function stopShiftEndMonitor() {
+  if (shiftEndTimer) { clearInterval(shiftEndTimer); shiftEndTimer = null; }
+}
+
+// 檢查是否到了下班時間
+function checkShiftEnd() {
+  if (!currentUser || !currentUserData) return;
+  var now    = new Date();
+  var today  = fmtDate(now);
+  var nowMin = now.getHours() * 60 + now.getMinutes();
+  var shifts = sysSettings.shifts || [];
+
+  shifts.forEach(function(shift, idx) {
+    var parts    = shift.end.split(':');
+    var endMin   = parseInt(parts[0]) * 60 + parseInt(parts[1]);
+    var alertKey = today + '_' + idx; // 每天每班別只彈一次
+
+    // 已經彈過就跳過
+    if (shiftEndAlerted[alertKey]) return;
+
+    // 時間到了下班時間（允許 1 分鐘誤差）
+    if (nowMin < endMin) return;
+
+    // 檢查該班別是否已上班且尚未下班
+    var recId = today + '_' + currentUser.uid + '_' + idx;
+    db.collection('records').doc(recId).get().then(function(snap) {
+      if (!snap.exists) return; // 未上班，不處理
+      var rec = snap.data();
+      if (!rec.clockIn)  return; // 未上班
+      if (rec.clockOut)  return; // 已下班
+
+      // 標記已彈出，避免重複
+      shiftEndAlerted[alertKey] = true;
+
+      // 將 Firestore 記錄標記為待加班確認
+      db.collection('records').doc(recId).update({ isOvertimePending: true });
+
+      // 發送後台通知
+      sendOvertimeNotification({
+        empId:     currentUser.uid,
+        empName:   currentUserData.name,
+        empDept:   currentUserData.dept || '',
+        date:      today,
+        shiftIdx:  idx,
+        shiftName: shift.name,
+        shiftEnd:  shift.end,
+        recId:     recId,
+        type:      'overtime_pending',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+
+      // 儲存待執行的自動補打卡資料
+      pendingAutoClockData = { recId: recId, shiftEnd: shift.end, shiftName: shift.name, shiftIdx: idx };
+
+      // 彈出加班確認彈窗
+      showOvertimeDialog(shift, idx, recId);
+
+      // 15 分鐘後自動補打卡
+      if (autoClockOutTimer) clearTimeout(autoClockOutTimer);
+      autoClockOutTimer = setTimeout(function() {
+        doAutoClockOut(recId, shift.end, shift.name);
+      }, 15 * 60 * 1000);
+    });
+  });
+}
+
+// 顯示加班確認彈窗
+function showOvertimeDialog(shift, shiftIdx, recId) {
+  var dlg = document.getElementById('overtimeDialog');
+  if (!dlg) return;
+  document.getElementById('otShiftName').textContent = shift.name;
+  document.getElementById('otShiftEnd').textContent  = shift.end;
+
+  // 啟動 15 分鐘倒數
+  var remaining = 15 * 60;
+  var otCountEl = document.getElementById('otCountdown');
+  if (otCountEl) otCountEl.textContent = '15:00';
+  if (window._otCountdownTimer) clearInterval(window._otCountdownTimer);
+  window._otCountdownTimer = setInterval(function() {
+    remaining--;
+    if (remaining <= 0) {
+      clearInterval(window._otCountdownTimer);
+      if (otCountEl) otCountEl.textContent = '00:00';
+      return;
+    }
+    var m = Math.floor(remaining / 60);
+    var s = remaining % 60;
+    if (otCountEl) otCountEl.textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+  }, 1000);
+
+  dlg.style.display = 'flex';
+}
+
+function closeOvertimeDialog() {
+  var dlg = document.getElementById('overtimeDialog');
+  if (dlg) dlg.style.display = 'none';
+  if (window._otCountdownTimer) { clearInterval(window._otCountdownTimer); window._otCountdownTimer = null; }
+}
+
+// 員工選擇「我要加班」
+function confirmOvertime() {
+  closeOvertimeDialog();
+  // 清除自動補打卡計時器
+  if (autoClockOutTimer) { clearTimeout(autoClockOutTimer); autoClockOutTimer = null; }
+  // 更新 Firestore 記錄為加班中
+  if (pendingAutoClockData) {
+    db.collection('records').doc(pendingAutoClockData.recId).update({
+      isOvertimePending: false,
+      isOvertime: true
+    });
+    // 更新後台通知為加班確認
+    var today = fmtDate(new Date());
+    db.collection('notifications')
+      .where('empId', '==', currentUser.uid)
+      .where('date', '==', today)
+      .where('shiftIdx', '==', pendingAutoClockData.shiftIdx)
+      .where('type', '==', 'overtime_pending')
+      .get().then(function(snap) {
+        snap.forEach(function(doc) {
+          doc.ref.update({ type: 'overtime_confirmed', isRead: false });
+        });
+      });
+    pendingAutoClockData = null;
+  }
+  showToast('加班狀態已記錄，請完工後手動進行下班打卡', 'success');
+}
+
+// 員工選擇「立即下班打卡」
+function doClockOutNow() {
+  closeOvertimeDialog();
+  if (autoClockOutTimer) { clearTimeout(autoClockOutTimer); autoClockOutTimer = null; }
+  doClock('out');
+}
+
+// 自動補打卡（寫入標準下班時間）
+function doAutoClockOut(recId, shiftEnd, shiftName) {
+  closeOvertimeDialog();
+  pendingAutoClockData = null;
+  // 寫入標準下班時間（非執行時間）
+  db.collection('records').doc(recId).update({
+    clockOut:          shiftEnd,
+    clockOutAt:        firebase.firestore.FieldValue.serverTimestamp(),
+    isAutoClockOut:    true,
+    isOvertimePending: false
+  }).then(function() {
+    showToast('「' + shiftName + '」已自動記錄下班（' + shiftEnd + '）', 'success');
+    loadTodayStatus();
+    // 更新後台通知
+    var today = fmtDate(new Date());
+    db.collection('notifications')
+      .where('recId', '==', recId)
+      .where('type', '==', 'overtime_pending')
+      .get().then(function(snap) {
+        snap.forEach(function(doc) {
+          doc.ref.update({ type: 'auto_clocked_out', isRead: false });
+        });
+      });
+  }).catch(function() {
+    showToast('自動下班失敗，請手動打卡', 'error');
+  });
+}
+
+// 發送後台通知
+function sendOvertimeNotification(data) {
+  db.collection('notifications').add(data).catch(function() {
+    // 通知寫入失敗不影響主流程
+  });
+}
+
+window.confirmOvertime  = confirmOvertime;
+window.doClockOutNow    = doClockOutNow;
+window.closeOvertimeDialog = closeOvertimeDialog;
+
+// ============================================================
+// 後台加班通知監聽
+// ============================================================
+
+function startAdminNotifListener() {
+  if (overtimeNotifUnsub) { overtimeNotifUnsub(); overtimeNotifUnsub = null; }
+  var today = fmtDate(new Date());
+  overtimeNotifUnsub = db.collection('notifications')
+    .where('date', '==', today)
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(function(snap) {
+      var notifs = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+      renderOvertimePanel(notifs);
+      // 側邊欄後台待處理通知徽章
+      var unread = notifs.filter(function(n) { return !n.isRead; }).length;
+      var badge = document.getElementById('notifBadge');
+      if (badge) {
+        badge.textContent = unread;
+        badge.style.display = unread > 0 ? 'inline-flex' : 'none';
+      }
+    }, function() { /* 監聽失敗不影響主流程 */ });
+}
+
+function renderOvertimePanel(notifs) {
+  var panel = document.getElementById('overtimePanel');
+  if (!panel) return;
+
+  // 只顯示待處理和自動補打卡的通知
+  var active = notifs.filter(function(n) {
+    return n.type === 'overtime_pending' || n.type === 'overtime_confirmed' || n.type === 'auto_clocked_out';
+  });
+
+  if (active.length === 0) {
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = 'block';
+
+  var html = '';
+  active.forEach(function(n) {
+    var typeLabel, typeClass;
+    if (n.type === 'overtime_pending') {
+      typeLabel = '待確認'; typeClass = 'badge-orange';
+    } else if (n.type === 'overtime_confirmed') {
+      typeLabel = '加班中'; typeClass = 'badge-blue';
+    } else {
+      typeLabel = '自動下班'; typeClass = 'badge-teal';
+    }
+    var readClass = n.isRead ? 'notif-row-read' : '';
+    html += '<div class="notif-row ' + readClass + '">';
+    html += '<div class="notif-info">';
+    html += '<strong>' + (n.empName||'') + '</strong>';
+    html += '<span class="badge ' + typeClass + '" style="margin-left:8px;">' + typeLabel + '</span>';
+    html += '<div class="notif-detail">' + (n.shiftName||'') + ' 下班時間 ' + (n.shiftEnd||'') + '</div>';
+    html += '</div>';
+    if (!n.isRead) {
+      html += '<button class="btn btn-sm btn-outline" onclick="dismissNotif(\'' + n.id + '\')">\u5df2處理</button>';
+    }
+    html += '</div>';
+  });
+  document.getElementById('overtimePanelBody').innerHTML = html;
+}
+
+function dismissNotif(notifId) {
+  db.collection('notifications').doc(notifId).update({ isRead: true });
+}
+
+window.dismissNotif = dismissNotif;
 
 function loadMyRecords() {
   var month = document.getElementById('myMonthSel').value;
@@ -695,6 +965,8 @@ function initAdmin() {
   loadDashboard();
   loadEmployeeList();
   loadSettingsForm();
+  // 啟動後台加班通知監聽
+  startAdminNotifListener();
 }
 
 // 日期導航
