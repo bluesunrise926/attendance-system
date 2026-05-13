@@ -214,8 +214,9 @@
         <span>管理後台</span>
       </div>
       <nav class="sidebar-nav">
-        <a class="nav-link active" data-tab="dashboard" onclick="switchTab('dashboard',this)">
+        <a class="nav-link active" data-tab="dashboard" onclick="switchTab('dashboard',this)" style="position:relative;">
           <span>📊</span><span>今日概況</span>
+          <span id="notifBadge" class="notif-badge" style="display:none;">0</span>
         </a>
         <a class="nav-link" data-tab="records" onclick="switchTab('records',this)">
           <span>📋</span><span>出勤記錄</span>
@@ -255,6 +256,15 @@
             <button class="date-nav-btn date-nav-today" onclick="shiftDashDate(0)" title="回到今天">今天</button>
           </div>
         </div>
+        <!-- 加班通知面板 -->
+        <div id="overtimePanel" class="overtime-panel" style="display:none;">
+          <div class="overtime-panel-head">
+            <span>⚠️ 加班 / 未打卡下班通知</span>
+            <span class="overtime-panel-hint">以下員工已到下班時間但尚未打卡下班</span>
+          </div>
+          <div id="overtimePanelBody"></div>
+        </div>
+
         <div class="kpi-grid">
           <div class="kpi-card kpi-blue">
             <div class="kpi-ring-wrap">
@@ -554,6 +564,24 @@
         <div id="manualClockError" class="error-msg" style="display:none;"></div>
         <button class="btn btn-primary btn-full" onclick="saveManualClock()">儲存補登記錄</button>
         <p style="font-size:12px;color:#aaa;margin-top:8px;text-align:center;">補登記錄將標註「手動補登」，保留审計記錄</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 加班確認彈窗（員工端） -->
+  <div id="overtimeDialog" class="ot-dialog-overlay" style="display:none;">
+    <div class="ot-dialog-box">
+      <div class="ot-dialog-icon">⏰</div>
+      <h3 class="ot-dialog-title">下班時間已到</h3>
+      <p class="ot-dialog-msg">「<span id="otShiftName"></span>」的下班時間為 <strong id="otShiftEnd"></strong>，您目前是否在加班中？</p>
+      <div class="ot-countdown-wrap">
+        <span class="ot-countdown-label">若未操作，將在</span>
+        <span id="otCountdown" class="ot-countdown">15:00</span>
+        <span class="ot-countdown-label">後自動記錄下班</span>
+      </div>
+      <div class="ot-dialog-btns">
+        <button class="ot-btn ot-btn-primary" onclick="doClockOutNow()">✅ 立即下班打卡</button>
+        <button class="ot-btn ot-btn-outline" onclick="confirmOvertime()">⏱ 我要加班</button>
       </div>
     </div>
   </div>
