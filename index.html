@@ -58,7 +58,7 @@
   <!-- 員工自助註冊畫面 -->
   <div id="registerScreen" class="screen">
     <div class="login-bg"></div>
-    <div class="login-container" style="max-width:460px;">
+    <div class="login-container" style="max-width:480px;">
       <div class="logo">
         <div class="logo-icon">📝</div>
         <h1>員工自助註冊</h1>
@@ -68,6 +68,10 @@
         <div class="form-group">
           <label>姓名 <span class="required">*</span></label>
           <input type="text" id="regName" placeholder="請輸入中文姓名">
+        </div>
+        <div class="form-group">
+          <label>電話 <span class="required">*</span></label>
+          <input type="tel" id="regPhone" placeholder="例：0912-345-678">
         </div>
         <div class="form-group">
           <label>電子郵件（作為登入帳號）<span class="required">*</span></label>
@@ -85,17 +89,51 @@
         </div>
         <div class="form-group">
           <label>部門</label>
-          <input type="text" id="regDept" placeholder="例：業務部、廚房、外場">
+          <input type="text" id="regDept" placeholder="例：廚房、外場">
         </div>
         <div class="form-group">
           <label>到職日期 <span class="required">*</span></label>
           <input type="date" id="regJoinDate">
         </div>
-        <div class="form-group">
-          <label>電話（選填）</label>
-          <input type="tel" id="regPhone" placeholder="例：0912-345-678">
+
+        <!-- 身分證上傳說明 -->
+        <div class="id-upload-notice">
+          <div class="id-notice-icon">🔒</div>
+          <div class="id-notice-text">
+            <strong>身分證上傳（必填）</strong>
+            <p>僅用於勞健保投保登記，資料加密存於專屬雲端空間，不作其他用途。</p>
+          </div>
         </div>
+        <div class="form-row-2">
+          <div class="form-group">
+            <label>身分證正面 <span class="required">*</span></label>
+            <div class="id-upload-box" id="idFrontBox" onclick="document.getElementById('regIdFront').click()">
+              <input type="file" id="regIdFront" accept="image/*" style="display:none;" onchange="previewId('regIdFront','idFrontPreview','idFrontBox')">
+              <div id="idFrontPreview" class="id-preview-placeholder">
+                <span class="id-upload-icon">📷</span>
+                <span>點擊上傳照片</span>
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>身分證背面 <span class="required">*</span></label>
+            <div class="id-upload-box" id="idBackBox" onclick="document.getElementById('regIdBack').click()">
+              <input type="file" id="regIdBack" accept="image/*" style="display:none;" onchange="previewId('regIdBack','idBackPreview','idBackBox')">
+              <div id="idBackPreview" class="id-preview-placeholder">
+                <span class="id-upload-icon">📷</span>
+                <span>點擊上傳照片</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div id="regError" class="error-msg" style="display:none;"></div>
+        <div id="regProgress" style="display:none;margin-bottom:12px;">
+          <div style="background:#e5e7eb;border-radius:8px;height:8px;overflow:hidden;">
+            <div id="regProgressBar" style="background:var(--primary);height:100%;width:0%;transition:width 0.3s;"></div>
+          </div>
+          <p id="regProgressText" style="font-size:12px;color:#888;margin-top:4px;text-align:center;">上傳中...</p>
+        </div>
         <button class="btn btn-primary btn-full" id="regBtn" onclick="handleRegister()">完成註冊並登入</button>
         <div class="register-link-row" style="margin-top:12px;">
           <span>已有帳號？</span>
@@ -467,6 +505,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
 
   <!-- 主程式 -->
   <script src="app.js"></script>
