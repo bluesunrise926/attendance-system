@@ -1,5 +1,6 @@
 // ============================================================
-// 員工打卡系統 — Firebase Compat 版 v2（直接顯示登入頁）
+// 員工打卡系統 — Firebase Compat 版 v3
+// 新增：員工自助註冊、離職日管理
 // 符合台灣勞動基準法第30條出勤記錄規定
 // ============================================================
 
@@ -18,7 +19,6 @@ var firebaseConfig = {
   appId: "1:1065273909620:web:58ab926235611f77c4cc21"
 };
 
-// 初始化 Firebase（避免重複初始化）
 if (!firebase.apps.length) {
   firebase.initializeApp(firebaseConfig);
 }
@@ -33,7 +33,6 @@ var currentUserData = null;
 var currentPosition = null;
 var clockTimer      = null;
 
-// 自動登出計時器
 var IDLE_TIMEOUT = 3 * 60 * 1000;
 var WARN_BEFORE  = 60 * 1000;
 var idleTimer      = null;
@@ -50,17 +49,20 @@ var sysSettings = {
 };
 
 // ============================================================
-// 頁面載入時恢復記憶帳號
+// 頁面載入
 // ============================================================
 document.addEventListener('DOMContentLoaded', function() {
   restoreRememberedEmail();
-  // 讓 Enter 鍵可以登入
   document.getElementById('loginPassword').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') handleLogin();
   });
   document.getElementById('loginEmail').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') handleLogin();
   });
+  // 設定到職日預設為今天
+  var today = fmtDate(new Date());
+  var regJoin = document.getElementById('regJoinDate');
+  if (regJoin) regJoin.value = today;
 });
 
 function restoreRememberedEmail() {
@@ -72,6 +74,27 @@ function restoreRememberedEmail() {
     if (rememberChk) rememberChk.checked = true;
   }
 }
+
+// ============================================================
+// 畫面切換
+// ============================================================
+function showLoginScreen() {
+  showScreen('loginScreen');
+}
+
+function showRegisterScreen() {
+  // 清空表單
+  ['regName','regEmail','regPwd','regPwd2','regDept','regPhone'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('regJoinDate').value = fmtDate(new Date());
+  document.getElementById('regError').style.display = 'none';
+  showScreen('registerScreen');
+}
+
+window.showLoginScreen    = showLoginScreen;
+window.showRegisterScreen = showRegisterScreen;
 
 // ============================================================
 // 自動登出（3 分鐘無操作）
@@ -100,7 +123,6 @@ function resetIdleTimer() {
   clearTimeout(warnTimer);
   clearInterval(countdownTimer);
   hideAutoLogoutBar();
-
   warnTimer = setTimeout(function() { showAutoLogoutBar(); }, IDLE_TIMEOUT - WARN_BEFORE);
   idleTimer = setTimeout(function() {
     stopIdleWatch();
@@ -152,15 +174,12 @@ function handleLogin() {
   btn.textContent = '登入中...';
   btn.disabled    = true;
   errEl.style.display = 'none';
-
-  // 顯示載入畫面
   showScreen('loadingScreen');
 
   auth.signInWithEmailAndPassword(email, password)
     .then(function(cred) {
-      var user = cred.user;
-      currentUser = user;
-      return loadUserData(user.uid);
+      currentUser = cred.user;
+      return loadUserData(cred.user.uid);
     })
     .then(function() {
       return loadSettings();
@@ -191,6 +210,81 @@ function handleLogin() {
       showError(errEl, msg);
     });
 }
+
+// ============================================================
+// 員工自助註冊
+// ============================================================
+function handleRegister() {
+  var name     = document.getElementById('regName').value.trim();
+  var email    = document.getElementById('regEmail').value.trim();
+  var pwd      = document.getElementById('regPwd').value;
+  var pwd2     = document.getElementById('regPwd2').value;
+  var dept     = document.getElementById('regDept').value.trim();
+  var joinDate = document.getElementById('regJoinDate').value;
+  var phone    = document.getElementById('regPhone').value.trim();
+  var errEl    = document.getElementById('regError');
+  var btn      = document.getElementById('regBtn');
+
+  // 驗證
+  if (!name)     { showError(errEl, '請填寫姓名'); return; }
+  if (!email)    { showError(errEl, '請填寫電子郵件'); return; }
+  if (!pwd)      { showError(errEl, '請設定密碼'); return; }
+  if (pwd.length < 6) { showError(errEl, '密碼至少需要 6 個字元'); return; }
+  if (pwd !== pwd2)   { showError(errEl, '兩次密碼輸入不一致'); return; }
+  if (!joinDate) { showError(errEl, '請填寫到職日期'); return; }
+
+  errEl.style.display = 'none';
+  btn.textContent = '註冊中...';
+  btn.disabled    = true;
+
+  var newUid = null;
+
+  auth.createUserWithEmailAndPassword(email, pwd)
+    .then(function(cred) {
+      newUid = cred.user.uid;
+      return db.collection('users').doc(newUid).set({
+        name:      name,
+        email:     email,
+        dept:      dept,
+        joinDate:  joinDate,
+        leaveDate: '',
+        phone:     phone,
+        role:      'employee',
+        active:    true,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    })
+    .then(function() {
+      // 註冊成功後直接登入
+      currentUser = auth.currentUser;
+      return loadUserData(newUid);
+    })
+    .then(function() {
+      return loadSettings();
+    })
+    .then(function() {
+      btn.textContent = '完成註冊並登入';
+      btn.disabled    = false;
+      showToast('註冊成功！歡迎 ' + name, 'success');
+      showScreen('employeeScreen');
+      initEmployee();
+      startIdleWatch();
+    })
+    .catch(function(e) {
+      btn.textContent = '完成註冊並登入';
+      btn.disabled    = false;
+      var msg = e.code === 'auth/email-already-in-use'
+        ? '此電子郵件已被使用，請直接登入或使用其他信箱'
+        : e.code === 'auth/invalid-email'
+        ? '電子郵件格式不正確'
+        : e.code === 'auth/weak-password'
+        ? '密碼強度不足，請使用更複雜的密碼'
+        : '註冊失敗：' + e.message;
+      showError(errEl, msg);
+    });
+}
+
+window.handleRegister = handleRegister;
 
 function handleLogout() {
   stopIdleWatch();
@@ -252,10 +346,10 @@ function startClock() {
 
 function updateClock() {
   var now = new Date();
-  document.getElementById('currentTime').textContent =
-    now.toLocaleTimeString('zh-TW', { hour12: false });
-  document.getElementById('currentDate').textContent =
-    now.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+  document.getElementById('currentTime').textContent = now.toLocaleTimeString('zh-TW', { hour12: false });
+  document.getElementById('currentDate').textContent = now.toLocaleDateString('zh-TW', {
+    year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'
+  });
   var dd = document.getElementById('dashDate');
   if (dd) dd.textContent = now.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' });
 }
@@ -293,27 +387,26 @@ function loadTodayStatus() {
   var today = fmtDate(new Date());
   var recId = today + '_' + currentUser.uid;
   db.collection('records').doc(recId).get().then(function(snap) {
-    var rec = snap.exists ? snap.data() : null;
-    var icon    = document.getElementById('statusIcon');
-    var text    = document.getElementById('statusText');
-    var sub     = document.getElementById('statusSub');
-    var btnIn   = document.getElementById('btnIn');
-    var btnOut  = document.getElementById('btnOut');
+    var rec    = snap.exists ? snap.data() : null;
+    var icon   = document.getElementById('statusIcon');
+    var text   = document.getElementById('statusText');
+    var sub    = document.getElementById('statusSub');
+    var btnIn  = document.getElementById('btnIn');
+    var btnOut = document.getElementById('btnOut');
     var summary = document.getElementById('todaySummary');
-
     if (!rec) {
       icon.textContent = '📋'; text.textContent = '今日尚未打卡';
-      sub.textContent  = '正常上班時間：' + sysSettings.workStart;
+      sub.textContent = '正常上班時間：' + sysSettings.workStart;
       btnIn.disabled = false; btnOut.disabled = true;
       summary.style.display = 'none';
     } else if (rec.clockIn && !rec.clockOut) {
       icon.textContent = '✅'; text.textContent = '已上班打卡';
-      sub.textContent  = '上班時間：' + rec.clockIn;
+      sub.textContent = '上班時間：' + rec.clockIn;
       btnIn.disabled = true; btnOut.disabled = false;
       showSummary(rec.clockIn, null);
     } else if (rec.clockIn && rec.clockOut) {
       icon.textContent = '🏠'; text.textContent = '今日已完成打卡';
-      sub.textContent  = '工作時數：' + calcHoursStr(rec.clockIn, rec.clockOut);
+      sub.textContent = '工作時數：' + calcHoursStr(rec.clockIn, rec.clockOut);
       btnIn.disabled = true; btnOut.disabled = true;
       showSummary(rec.clockIn, rec.clockOut);
     }
@@ -328,10 +421,10 @@ function showSummary(clockIn, clockOut) {
 }
 
 function doClock(type) {
-  var now     = new Date();
-  var today   = fmtDate(now);
+  var now    = new Date();
+  var today  = fmtDate(now);
   var timeStr = now.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit' });
-  var recId   = today + '_' + currentUser.uid;
+  var recId  = today + '_' + currentUser.uid;
 
   if (currentPosition) {
     var dist = calcDist(currentPosition.latitude, currentPosition.longitude, sysSettings.lat, sysSettings.lng);
@@ -349,10 +442,10 @@ function doClock(type) {
   var promise;
   if (type === 'in') {
     promise = db.collection('records').doc(recId).set({
-      empId: currentUser.uid,
+      empId:   currentUser.uid,
       empName: currentUserData.name,
       empDept: currentUserData.dept || '',
-      date: today,
+      date:    today,
       clockIn: timeStr,
       clockOut: null,
       lat: currentPosition ? currentPosition.latitude  : null,
@@ -361,7 +454,7 @@ function doClock(type) {
     });
   } else {
     promise = db.collection('records').doc(recId).update({
-      clockOut: timeStr,
+      clockOut:   timeStr,
       clockOutAt: firebase.firestore.FieldValue.serverTimestamp()
     });
   }
@@ -391,7 +484,7 @@ function loadMyRecords() {
       var records   = snap.docs.map(function(d) { return d.data(); });
       var container = document.getElementById('myRecordsList');
       if (records.length === 0) {
-        container.innerHTML = '<p style="text-align:center;color:#aaa;padding:20px;">本月無出勤記錄</p>';
+        container.innerHTML = '<p style="text-align:center;color:#aaa;padding:16px;">本月無出勤記錄</p>';
         return;
       }
       var html = '<table class="dt"><thead><tr><th>日期</th><th>上班</th><th>下班</th><th>工時</th></tr></thead><tbody>';
@@ -432,7 +525,7 @@ function loadDashboard() {
   ]).then(function(results) {
     var empSnap = results[0], recSnap = results[1];
     var employees = empSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
-      .filter(function(e) { return e.role === 'employee'; });
+      .filter(function(e) { return e.role === 'employee' && e.active !== false; });
     var records = recSnap.docs.map(function(d) { return d.data(); });
     var present = 0, left = 0;
     employees.forEach(function(e) {
@@ -484,20 +577,44 @@ function loadEmployeeList() {
   db.collection('users').get().then(function(snap) {
     var employees = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
       .filter(function(e) { return e.role === 'employee'; });
+
+    // 更新篩選下拉
     ['recEmp','expEmp'].forEach(function(selId) {
       var sel = document.getElementById(selId);
       if (!sel) return;
       var cur = sel.value;
       while (sel.options.length > 1) sel.remove(1);
-      employees.forEach(function(e) { sel.add(new Option(e.name, e.id)); });
+      employees.filter(function(e) { return e.active !== false; })
+               .forEach(function(e) { sel.add(new Option(e.name, e.id)); });
       sel.value = cur;
     });
+
     var html = '';
     employees.forEach(function(e) {
-      var isActive = e.active !== false;
-      html += '<tr><td><strong>' + e.name + '</strong></td><td>' + (e.email||'') + '</td><td>' + (e.dept||'') + '</td><td>' + (e.joinDate||'') + '</td><td>' + (isActive ? '<span class="badge badge-green">在職</span>' : '<span class="badge badge-gray">停用</span>') + '</td><td><button class="btn btn-sm btn-danger" onclick="toggleEmpStatus(\'' + e.id + '\',' + isActive + ')">' + (isActive ? '停用' : '啟用') + '</button></td></tr>';
+      var isActive  = e.active !== false;
+      var hasLeave  = e.leaveDate && e.leaveDate !== '';
+      // 狀態判斷：有離職日 → 已離職；停用 → 停用；其他 → 在職
+      var statusBadge;
+      if (hasLeave) {
+        statusBadge = '<span class="badge badge-orange">已離職</span>';
+      } else if (!isActive) {
+        statusBadge = '<span class="badge badge-gray">停用</span>';
+      } else {
+        statusBadge = '<span class="badge badge-green">在職</span>';
+      }
+      html += '<tr>'
+        + '<td><strong>' + e.name + '</strong></td>'
+        + '<td>' + (e.email||'') + '</td>'
+        + '<td>' + (e.dept||'') + '</td>'
+        + '<td>' + (e.joinDate||'—') + '</td>'
+        + '<td>' + (e.leaveDate || '—') + '</td>'
+        + '<td>' + statusBadge + '</td>'
+        + '<td class="emp-actions">'
+        + '<button class="btn btn-sm btn-outline" onclick="openEditEmpModal(\'' + e.id + '\')">編輯</button> '
+        + '<button class="btn btn-sm btn-danger" onclick="toggleEmpStatus(\'' + e.id + '\',' + isActive + ')">' + (isActive ? '停用' : '啟用') + '</button>'
+        + '</td></tr>';
     });
-    document.getElementById('empBody').innerHTML = html || '<tr><td colspan="6" class="empty-row">尚無員工資料</td></tr>';
+    document.getElementById('empBody').innerHTML = html || '<tr><td colspan="7" class="empty-row">尚無員工資料</td></tr>';
   });
 }
 
@@ -514,7 +631,9 @@ function createEmployee() {
   auth.createUserWithEmailAndPassword(email, pwd)
     .then(function(cred) {
       return db.collection('users').doc(cred.user.uid).set({
-        name: name, email: email, dept: dept, joinDate: joinDate,
+        name: name, email: email, dept: dept,
+        joinDate: joinDate, leaveDate: '',
+        phone: '',
         role: 'employee', active: true,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
@@ -531,6 +650,59 @@ function createEmployee() {
       showError(errEl, msg);
     });
 }
+
+// ============================================================
+// 編輯員工（含離職日）
+// ============================================================
+function openEditEmpModal(uid) {
+  db.collection('users').doc(uid).get().then(function(snap) {
+    if (!snap.exists) { showToast('找不到員工資料', 'error'); return; }
+    var data = snap.data();
+    document.getElementById('editEmpUid').value   = uid;
+    document.getElementById('editEmpName').value  = data.name  || '';
+    document.getElementById('editEmpDept').value  = data.dept  || '';
+    document.getElementById('editEmpJoin').value  = data.joinDate  || '';
+    document.getElementById('editEmpLeave').value = data.leaveDate || '';
+    document.getElementById('editEmpError').style.display = 'none';
+    document.getElementById('editEmpModal').style.display = 'flex';
+  });
+}
+
+function saveEditEmployee() {
+  var uid      = document.getElementById('editEmpUid').value;
+  var name     = document.getElementById('editEmpName').value.trim();
+  var dept     = document.getElementById('editEmpDept').value.trim();
+  var joinDate = document.getElementById('editEmpJoin').value;
+  var leaveDate = document.getElementById('editEmpLeave').value;
+  var errEl    = document.getElementById('editEmpError');
+
+  if (!name) { showError(errEl, '請填寫員工姓名'); return; }
+  errEl.style.display = 'none';
+
+  // 如果有離職日，自動設為停用
+  var updateData = {
+    name: name,
+    dept: dept,
+    joinDate: joinDate,
+    leaveDate: leaveDate
+  };
+  if (leaveDate) {
+    updateData.active = false;
+  }
+
+  db.collection('users').doc(uid).update(updateData)
+    .then(function() {
+      showToast('員工資料已更新', 'success');
+      closeModal('editEmpModal');
+      loadEmployeeList();
+    })
+    .catch(function(e) {
+      showError(errEl, '更新失敗：' + e.message);
+    });
+}
+
+window.openEditEmpModal  = openEditEmpModal;
+window.saveEditEmployee  = saveEditEmployee;
 
 function toggleEmpStatus(uid, currentActive) {
   db.collection('users').doc(uid).update({ active: !currentActive })
@@ -558,15 +730,20 @@ function saveGPSSettings() {
   };
   if (isNaN(settings.lat) || isNaN(settings.lng)) { showToast('請輸入有效的座標', 'error'); return; }
   sysSettings = Object.assign({}, sysSettings, settings);
-  db.collection('settings').doc('main').set(sysSettings)
-    .then(function() { showToast('GPS 設定已儲存', 'success'); });
+  db.collection('settings').doc('main').set(sysSettings, { merge: true })
+    .then(function() { showToast('GPS 設定已儲存', 'success'); })
+    .catch(function() { showToast('儲存失敗，請確認網路連線', 'error'); });
 }
 
 function saveTimeSettings() {
-  sysSettings.workStart = document.getElementById('sWorkStart').value;
-  sysSettings.workEnd   = document.getElementById('sWorkEnd').value;
-  db.collection('settings').doc('main').set(sysSettings)
-    .then(function() { showToast('上下班時間設定已儲存', 'success'); });
+  var settings = {
+    workStart: document.getElementById('sWorkStart').value,
+    workEnd:   document.getElementById('sWorkEnd').value,
+  };
+  sysSettings = Object.assign({}, sysSettings, settings);
+  db.collection('settings').doc('main').set(sysSettings, { merge: true })
+    .then(function() { showToast('時間設定已儲存', 'success'); })
+    .catch(function() { showToast('儲存失敗，請確認網路連線', 'error'); });
 }
 
 function useMyLocation() {
