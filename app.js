@@ -3,6 +3,22 @@
 // 符合台灣勞動基準法第30條出勤記錄規定
 // ============================================================
 
+// ★ 頁面載入時立即檢查：若上次有殘留的 Firebase Session 導致卡住，自動清除
+// 判斷依據：若 sessionStorage 沒有 'fresh_load' 旗標，代表是全新載入，清除 IndexedDB
+(async () => {
+  if (!sessionStorage.getItem('fresh_load')) {
+    sessionStorage.setItem('fresh_load', '1');
+    try {
+      const dbs = await indexedDB.databases();
+      await Promise.all(dbs.map(d => new Promise(res => {
+        const r = indexedDB.deleteDatabase(d.name);
+        r.onsuccess = res; r.onerror = res;
+      })));
+      localStorage.removeItem('firebase:authUser:AIzaSyDRBU7-cKEw0Je9YsjR1Ruj1GFd-6i56mY:[DEFAULT]');
+    } catch(e) {}
+  }
+})();
+
 import { db, auth } from "./firebase-config.js";
 import {
   collection, doc, setDoc, getDoc, getDocs,
@@ -63,7 +79,7 @@ const authTimeout = setTimeout(async () => {
     hideScreen('loadingScreen');
     showScreen('loginScreen');
   }
-}, 10000);
+}, 6000);
 
 onAuthStateChanged(auth, async (user) => {
   clearTimeout(authTimeout);
