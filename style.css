@@ -23,12 +23,12 @@
 body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
 /* 畫面切換 */
-.screen { display: none; min-height: 100vh; }
-.screen.active { display: block; }
-#adminScreen.active { display: flex; }
+.screen { display: none !important; min-height: 100vh; }
+.screen.active { display: flex !important; }
+#adminScreen.active { display: flex !important; }
 
 /* 載入畫面 */
-#loadingScreen { background: var(--dark); display: flex; align-items: center; justify-content: center; }
+#loadingScreen { background: var(--dark); align-items: center; justify-content: center; }
 .loading-container { text-align: center; color: white; }
 .loading-logo { font-size: 64px; margin-bottom: 16px; }
 .loading-text { font-size: 22px; font-weight: 700; margin-bottom: 24px; }
@@ -37,7 +37,7 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* 登入畫面 */
-#loginScreen { background: linear-gradient(135deg, var(--dark) 0%, var(--dark2) 100%); display: flex; align-items: center; justify-content: center; }
+#loginScreen { background: linear-gradient(135deg, var(--dark) 0%, var(--dark2) 100%); align-items: center; justify-content: center; }
 .login-container { width: 100%; max-width: 400px; padding: 24px; }
 .logo { text-align: center; margin-bottom: 32px; color: white; }
 .logo-icon { font-size: 56px; margin-bottom: 12px; }
