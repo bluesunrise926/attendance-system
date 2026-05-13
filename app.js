@@ -41,10 +41,25 @@ let sysSettings = {
 // 初始化：監聽登入狀態（含超時保護）
 // ============================================================
 
-// 超時保護：若 10 秒內 Firebase 未回應，直接跳到登入頁
-const authTimeout = setTimeout(() => {
+// 超時保護：若 10 秒內 Firebase 未回應，自動清除舊登入狀態並跳到登入頁
+async function clearAllAuthData() {
+  try {
+    // 清除 localStorage
+    localStorage.clear();
+    // 清除 IndexedDB（Firebase Session 儲存在此）
+    const dbs = await indexedDB.databases();
+    await Promise.all(dbs.map(db => new Promise((res) => {
+      const req = indexedDB.deleteDatabase(db.name);
+      req.onsuccess = res;
+      req.onerror = res;
+    })));
+  } catch(e) { /* 忽略清除錯誤 */ }
+}
+
+const authTimeout = setTimeout(async () => {
   const loading = document.getElementById('loadingScreen');
   if (loading && loading.classList.contains('active')) {
+    await clearAllAuthData();
     hideScreen('loadingScreen');
     showScreen('loginScreen');
   }
