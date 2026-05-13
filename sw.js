@@ -1,7 +1,7 @@
 // Service Worker — 員工打卡系統 PWA
-// v4：改用 compat SDK，強制清除所有舊快取
-const CACHE_NAME = 'attendance-v4';
-const CACHE_FILES = ['/', '/index.html', '/style.css', '/manifest.json'];
+// v5：修復 CSS display 優先順序，強制清除所有舊快取
+const CACHE_NAME = 'attendance-v5';
+const CACHE_FILES = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(
@@ -30,8 +30,8 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // app.js 永遠從網路取得最新版（不快取）
-  if (e.request.url.includes('app.js')) {
+  // app.js 和 style.css 永遠從網路取得最新版（不快取）
+  if (e.request.url.includes('app.js') || e.request.url.includes('style.css')) {
     e.respondWith(fetch(e.request));
     return;
   }
