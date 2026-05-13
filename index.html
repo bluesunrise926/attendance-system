@@ -230,7 +230,9 @@
           <span>📥</span><span>報表匯出</span>
         </a>
       </nav>
-      <button class="sidebar-logout" onclick="handleLogout()">登出系統</button>
+      <div class="sidebar-footer">
+        <button class="sidebar-logout" onclick="handleLogout()">🚪 登出系統</button>
+      </div>
     </aside>
 
     <!-- 主內容 -->
@@ -244,34 +246,73 @@
 
       <!-- 今日概況 -->
       <section id="tab-dashboard" class="tab-section active">
-        <h2 class="section-heading">今日出勤概況
-          <span class="heading-date" id="dashDate"></span>
-        </h2>
+        <div class="dash-heading-row">
+          <h2 class="section-heading">今日出勤概況</h2>
+          <div class="date-nav">
+            <button class="date-nav-btn" onclick="shiftDashDate(-1)" title="前一天">&#8249;</button>
+            <span class="heading-date" id="dashDate"></span>
+            <button class="date-nav-btn" onclick="shiftDashDate(1)" title="後一天">&#8250;</button>
+            <button class="date-nav-btn date-nav-today" onclick="shiftDashDate(0)" title="回到今天">今天</button>
+          </div>
+        </div>
         <div class="kpi-grid">
           <div class="kpi-card kpi-blue">
-            <div class="kpi-val" id="kpiTotal">—</div>
+            <div class="kpi-ring-wrap">
+              <svg class="kpi-ring" viewBox="0 0 44 44">
+                <circle class="kpi-ring-bg" cx="22" cy="22" r="18"/>
+                <circle class="kpi-ring-fill kpi-ring-blue" cx="22" cy="22" r="18" id="ringTotal"/>
+              </svg>
+              <div class="kpi-ring-val" id="kpiTotal">—</div>
+            </div>
             <div class="kpi-label">總員工數</div>
           </div>
           <div class="kpi-card kpi-green">
-            <div class="kpi-val" id="kpiPresent">—</div>
+            <div class="kpi-ring-wrap">
+              <svg class="kpi-ring" viewBox="0 0 44 44">
+                <circle class="kpi-ring-bg" cx="22" cy="22" r="18"/>
+                <circle class="kpi-ring-fill kpi-ring-green" cx="22" cy="22" r="18" id="ringPresent"/>
+              </svg>
+              <div class="kpi-ring-val" id="kpiPresent">—</div>
+            </div>
             <div class="kpi-label">上班中</div>
           </div>
           <div class="kpi-card kpi-teal">
-            <div class="kpi-val" id="kpiLeft">—</div>
+            <div class="kpi-ring-wrap">
+              <svg class="kpi-ring" viewBox="0 0 44 44">
+                <circle class="kpi-ring-bg" cx="22" cy="22" r="18"/>
+                <circle class="kpi-ring-fill kpi-ring-teal" cx="22" cy="22" r="18" id="ringLeft"/>
+              </svg>
+              <div class="kpi-ring-val" id="kpiLeft">—</div>
+            </div>
             <div class="kpi-label">已下班</div>
           </div>
           <div class="kpi-card kpi-orange">
-            <div class="kpi-val" id="kpiAbsent">—</div>
+            <div class="kpi-ring-wrap">
+              <svg class="kpi-ring" viewBox="0 0 44 44">
+                <circle class="kpi-ring-bg" cx="22" cy="22" r="18"/>
+                <circle class="kpi-ring-fill kpi-ring-orange" cx="22" cy="22" r="18" id="ringAbsent"/>
+              </svg>
+              <div class="kpi-ring-val" id="kpiAbsent">—</div>
+            </div>
             <div class="kpi-label">尚未打卡</div>
           </div>
         </div>
         <div class="card">
-          <div class="card-head">今日出勤明細</div>
+          <div class="card-head-row">
+            <span>今日出勤明細</span>
+            <div class="dash-filter-tabs" id="dashFilterTabs">
+              <button class="dash-tab active" onclick="filterDashTable('all',this)">全部</button>
+              <button class="dash-tab" onclick="filterDashTable('present',this)">上班中</button>
+              <button class="dash-tab" onclick="filterDashTable('left',this)">已下班</button>
+              <button class="dash-tab" onclick="filterDashTable('absent',this)">未打卡</button>
+            </div>
+          </div>
           <div class="table-wrap">
-            <table class="dt">
+            <table class="dt" id="dashTable">
               <thead><tr>
-                <th>員工姓名</th><th>部門</th>
-                <th>上班時間</th><th>下班時間</th><th>工時</th><th>狀態</th>
+                <th onclick="sortDashTable('name')" class="sortable">員工姓名 <span class="sort-icon">⇅</span></th>
+                <th onclick="sortDashTable('dept')" class="sortable">部門 <span class="sort-icon">⇅</span></th>
+                <th>上班時間</th><th>下班時間</th><th>工時</th><th>狀態</th><th>操作</th>
               </tr></thead>
               <tbody id="dashBody"></tbody>
             </table>
@@ -473,6 +514,46 @@
         </div>
         <div id="editEmpError" class="error-msg" style="display:none;"></div>
         <button class="btn btn-primary btn-full" onclick="saveEditEmployee()">儲存變更</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 補打卡彈窗（管理員用） -->
+  <div id="manualClockModal" class="modal-overlay" style="display:none;" onclick="closeModalOverlay('manualClockModal',event)">
+    <div class="modal-box">
+      <div class="modal-head">
+        <span>⭐ 手動補登打卡</span>
+        <button class="close-btn" onclick="closeModal('manualClockModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="manual-emp-info" id="manualEmpInfo"></div>
+        <div class="form-row-2">
+          <div class="form-group">
+            <label>日期</label>
+            <input type="date" id="manualDate">
+          </div>
+          <div class="form-group">
+            <label>班別</label>
+            <select id="manualShift" class="full-select"></select>
+          </div>
+        </div>
+        <div class="form-row-2">
+          <div class="form-group">
+            <label>上班時間</label>
+            <input type="time" id="manualClockIn">
+          </div>
+          <div class="form-group">
+            <label>下班時間（可留空）</label>
+            <input type="time" id="manualClockOut">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>補登原因</label>
+          <input type="text" id="manualNote" placeholder="例：手機沒電、系統故障">
+        </div>
+        <div id="manualClockError" class="error-msg" style="display:none;"></div>
+        <button class="btn btn-primary btn-full" onclick="saveManualClock()">儲存補登記錄</button>
+        <p style="font-size:12px;color:#aaa;margin-top:8px;text-align:center;">補登記錄將標註「手動補登」，保留审計記錄</p>
       </div>
     </div>
   </div>
