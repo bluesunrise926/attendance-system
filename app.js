@@ -447,6 +447,11 @@ function getGPS(onSuccess) {
   navigator.geolocation.getCurrentPosition(
     function(pos) {
       currentPosition = pos.coords;
+      // GPS 授權成功，解除打卡按鈕的 GPS 封鎖
+      var btnIn  = document.getElementById('btnIn');
+      var btnOut = document.getElementById('btnOut');
+      if (btnIn  && btnIn._gpsBlocked)  { btnIn.disabled  = false; btnIn._gpsBlocked  = false; }
+      if (btnOut && btnOut._gpsBlocked) { btnOut.disabled = false; btnOut._gpsBlocked = false; }
       var dist = calcDist(pos.coords.latitude, pos.coords.longitude, sysSettings.lat, sysSettings.lng);
       if (dist <= sysSettings.radius) {
         gpsText.textContent = '✅ 位置確認：' + sysSettings.locationName + '（' + Math.round(dist) + ' 公尺）';
@@ -461,6 +466,11 @@ function getGPS(onSuccess) {
     },
     function(err) {
       currentPosition = null;
+      // 拒絕授權時禁用打卡按鈕，防止繞過 GPS 打卡
+      var btnIn  = document.getElementById('btnIn');
+      var btnOut = document.getElementById('btnOut');
+      if (btnIn  && !btnIn.disabled)  { btnIn._gpsBlocked  = true; btnIn.disabled  = true; }
+      if (btnOut && !btnOut.disabled) { btnOut._gpsBlocked = true; btnOut.disabled = true; }
       if (err.code === 1) {
         // 使用者拒絕授權
         gpsText.innerHTML = '⛔ 定位權限未開啟，<strong style="color:#fff;text-decoration:underline;cursor:pointer;" onclick="requestGPSPermission()">點此重新授權</strong>';
@@ -494,6 +504,11 @@ function requestGPSPermission() {
     function() {
       gpsText.textContent = '⛔ 請至手機設定 → 隱私權 → 定位服務，開啟瀏覽器定位權限';
       gpsText.style.color = '#e63946';
+      // 再次拒絕時也確保按鈕被禁用
+      var btnIn  = document.getElementById('btnIn');
+      var btnOut = document.getElementById('btnOut');
+      if (btnIn  && !btnIn.disabled)  { btnIn._gpsBlocked  = true; btnIn.disabled  = true; }
+      if (btnOut && !btnOut.disabled) { btnOut._gpsBlocked = true; btnOut.disabled = true; }
     },
     { enableHighAccuracy: true, timeout: 10000 }
   );
@@ -529,13 +544,17 @@ function loadTodayStatus() {
       icon.textContent = '📋';
       text.textContent = '本班尚未打卡';
       sub.textContent  = curShift.name + '（' + curShift.start + ' – ' + curShift.end + '）';
-      btnIn.disabled = false; btnOut.disabled = true;
+      // 如果 GPS 封鎖中，保持禁用狀態
+      if (!btnIn._gpsBlocked)  btnIn.disabled  = false;
+      if (!btnOut._gpsBlocked) btnOut.disabled = true;
       summary.style.display = 'none';
     } else if (rec.clockIn && !rec.clockOut) {
       icon.textContent = '✅';
       text.textContent = '已上班打卡';
       sub.textContent  = curShift.name + ' 上班：' + rec.clockIn;
-      btnIn.disabled = true; btnOut.disabled = false;
+      // 已上班時，不管 GPS 狀態，上班按鈕一律禁用
+      btnIn.disabled = true;
+      if (!btnOut._gpsBlocked) btnOut.disabled = false;
       showSummary(rec.clockIn, null);
     } else if (rec.clockIn && rec.clockOut) {
       icon.textContent = '🏠';
