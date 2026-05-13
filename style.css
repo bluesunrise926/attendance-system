@@ -77,6 +77,25 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
 .btn-link { background: none; border: none; color: var(--primary); font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: underline; padding: 0; }
 .btn-link:hover { color: var(--primary-dark); }
 
+/* 班別選擇列（員工打卡畫面） */
+.shift-select-bar { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.1); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
+.shift-select-label { font-size: 13px; color: rgba(255,255,255,0.8); white-space: nowrap; }
+.shift-select-input { flex: 1; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); border-radius: 8px; color: white; padding: 7px 10px; font-size: 14px; font-weight: 600; }
+.shift-select-input option { background: var(--dark); color: white; }
+
+/* 班別設定列（管理後台） */
+.shift-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.shift-row:last-child { border-bottom: none; }
+.shift-row-name { flex: 0 0 100px; }
+.shift-row-time { display: flex; align-items: center; gap: 8px; flex: 1; flex-wrap: wrap; }
+.shift-time-label { font-size: 12px; color: var(--text-light); white-space: nowrap; }
+.shift-time-sep { color: var(--text-light); }
+.shift-input { padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 14px; background: white; color: var(--text); }
+.shift-input:focus { outline: none; border-color: var(--primary); }
+.shift-row-name .shift-input { width: 100%; }
+.shift-del-btn { flex-shrink: 0; }
+.shift-del-placeholder { width: 52px; flex-shrink: 0; }
+
 /* 員工管理操作列 */
 .emp-mgmt-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .emp-mgmt-hint { font-size: 13px; color: var(--text-light); }
