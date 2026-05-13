@@ -7,6 +7,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#1a1a2e">
   <title>員工打卡系統</title>
+  <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -45,8 +46,62 @@
         </div>
         <div id="loginError" class="error-msg" style="display:none;"></div>
         <button class="btn btn-primary btn-full" id="loginBtn" onclick="handleLogin()">登入</button>
+        <div class="register-link-row">
+          <span>第一次使用？</span>
+          <button class="btn-link" onclick="showRegisterScreen()">員工自助註冊</button>
+        </div>
       </div>
-      <p class="login-hint">系統由管理員建立帳號，如有問題請聯絡管理員</p>
+      <p class="login-hint">如有問題請聯絡管理員</p>
+    </div>
+  </div>
+
+  <!-- 員工自助註冊畫面 -->
+  <div id="registerScreen" class="screen">
+    <div class="login-bg"></div>
+    <div class="login-container" style="max-width:460px;">
+      <div class="logo">
+        <div class="logo-icon">📝</div>
+        <h1>員工自助註冊</h1>
+        <p class="subtitle">填寫基本資料，完成後即可登入打卡系統</p>
+      </div>
+      <div class="login-card">
+        <div class="form-group">
+          <label>姓名 <span class="required">*</span></label>
+          <input type="text" id="regName" placeholder="請輸入中文姓名">
+        </div>
+        <div class="form-group">
+          <label>電子郵件（作為登入帳號）<span class="required">*</span></label>
+          <input type="email" id="regEmail" placeholder="請輸入電子郵件">
+        </div>
+        <div class="form-row-2">
+          <div class="form-group">
+            <label>密碼 <span class="required">*</span></label>
+            <input type="password" id="regPwd" placeholder="至少 6 個字元">
+          </div>
+          <div class="form-group">
+            <label>確認密碼 <span class="required">*</span></label>
+            <input type="password" id="regPwd2" placeholder="再輸入一次">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>部門</label>
+          <input type="text" id="regDept" placeholder="例：業務部、廚房、外場">
+        </div>
+        <div class="form-group">
+          <label>到職日期 <span class="required">*</span></label>
+          <input type="date" id="regJoinDate">
+        </div>
+        <div class="form-group">
+          <label>電話（選填）</label>
+          <input type="tel" id="regPhone" placeholder="例：0912-345-678">
+        </div>
+        <div id="regError" class="error-msg" style="display:none;"></div>
+        <button class="btn btn-primary btn-full" id="regBtn" onclick="handleRegister()">完成註冊並登入</button>
+        <div class="register-link-row" style="margin-top:12px;">
+          <span>已有帳號？</span>
+          <button class="btn-link" onclick="showLoginScreen()">返回登入</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -131,7 +186,7 @@
         <span>⏰</span>
         <span>管理後台</span>
       </div>
-      <nav>
+      <nav class="sidebar-nav">
         <a class="nav-link active" data-tab="dashboard" onclick="switchTab('dashboard',this)">
           <span>📊</span><span>今日概況</span>
         </a>
@@ -189,8 +244,7 @@
             <table class="dt">
               <thead><tr>
                 <th>員工姓名</th><th>部門</th>
-                <th>上班時間</th><th>下班時間</th>
-                <th>工時</th><th>狀態</th>
+                <th>上班時間</th><th>下班時間</th><th>工時</th><th>狀態</th>
               </tr></thead>
               <tbody id="dashBody"></tbody>
             </table>
@@ -202,11 +256,10 @@
       <section id="tab-records" class="tab-section">
         <h2 class="section-heading">出勤記錄查詢</h2>
         <div class="filter-row">
-          <select id="recMonth" class="filter-sel"></select>
-          <select id="recEmp" class="filter-sel">
+          <select id="recMonth" onchange="loadRecords()" class="filter-sel"></select>
+          <select id="recEmp"   onchange="loadRecords()" class="filter-sel">
             <option value="">全部員工</option>
           </select>
-          <button class="btn btn-primary" onclick="loadRecords()">查詢</button>
         </div>
         <div class="card">
           <div class="table-wrap">
@@ -225,13 +278,16 @@
       <!-- 員工管理 -->
       <section id="tab-employees" class="tab-section">
         <h2 class="section-heading">員工管理</h2>
-        <button class="btn btn-primary" onclick="openAddEmpModal()">＋ 新增員工</button>
+        <div class="emp-mgmt-actions">
+          <button class="btn btn-primary" onclick="openAddEmpModal()">＋ 新增員工</button>
+          <span class="emp-mgmt-hint">員工也可透過「自助註冊」連結自行建立帳號</span>
+        </div>
         <div class="card" style="margin-top:16px;">
           <div class="table-wrap">
             <table class="dt">
               <thead><tr>
                 <th>姓名</th><th>電子郵件</th><th>部門</th>
-                <th>到職日</th><th>狀態</th><th>操作</th>
+                <th>到職日</th><th>離職日</th><th>狀態</th><th>操作</th>
               </tr></thead>
               <tbody id="empBody"></tbody>
             </table>
@@ -327,7 +383,7 @@
     </main>
   </div>
 
-  <!-- 新增員工彈窗 -->
+  <!-- 新增員工彈窗（管理員用） -->
   <div id="addEmpModal" class="modal-overlay" style="display:none;" onclick="closeModalOverlay('addEmpModal',event)">
     <div class="modal-box">
       <div class="modal-head">
@@ -360,6 +416,38 @@
         <p style="font-size:12px;color:#aaa;margin-top:8px;text-align:center;">
           建立後請將電子郵件與密碼告知員工，員工可自行修改密碼
         </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 編輯員工彈窗（管理員用） -->
+  <div id="editEmpModal" class="modal-overlay" style="display:none;" onclick="closeModalOverlay('editEmpModal',event)">
+    <div class="modal-box">
+      <div class="modal-head">
+        <span>編輯員工資料</span>
+        <button class="close-btn" onclick="closeModal('editEmpModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editEmpUid">
+        <div class="form-group">
+          <label>員工姓名 <span class="required">*</span></label>
+          <input type="text" id="editEmpName" placeholder="請輸入中文姓名">
+        </div>
+        <div class="form-group">
+          <label>部門</label>
+          <input type="text" id="editEmpDept" placeholder="例：業務部">
+        </div>
+        <div class="form-group">
+          <label>到職日期</label>
+          <input type="date" id="editEmpJoin">
+        </div>
+        <div class="form-group">
+          <label>離職日期（留空表示在職）</label>
+          <input type="date" id="editEmpLeave">
+          <span class="field-hint">填入離職日後，該員工狀態將自動標記為「已離職」</span>
+        </div>
+        <div id="editEmpError" class="error-msg" style="display:none;"></div>
+        <button class="btn btn-primary btn-full" onclick="saveEditEmployee()">儲存變更</button>
       </div>
     </div>
   </div>
