@@ -597,51 +597,292 @@ window.loadMyRecords = loadMyRecords;
 // ============================================================
 // 管理員後台
 // ============================================================
+var dashDate = null;          // 目前概況查看日期
+var dashAllRows = [];         // 存放全部資料以供過濾
+var dashSortCol = '';         // 目前排序欄
+var dashSortAsc = true;       // 排序方向
+var liveWorkTimer = null;     // 即時工時計時器
+
 function initAdmin() {
   updateClock();
   setInterval(updateClock, 1000);
   populateMonthSel('recMonth');
   populateMonthSel('expMonth');
   populateMonthSel('expMonthStats');
+  dashDate = new Date();
   loadDashboard();
   loadEmployeeList();
   loadSettingsForm();
 }
 
+// 日期導航
+function shiftDashDate(delta) {
+  if (!dashDate) dashDate = new Date();
+  if (delta === 0) {
+    dashDate = new Date();
+  } else {
+    dashDate = new Date(dashDate.getTime() + delta * 86400000);
+  }
+  // 不能超過今天
+  var today = new Date(); today.setHours(23,59,59,999);
+  if (dashDate > today) dashDate = new Date();
+  loadDashboard();
+}
+window.shiftDashDate = shiftDashDate;
+
+// 環形進度條輔助函數
+function setRing(id, ratio) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var r = 18, circ = 2 * Math.PI * r;
+  var dash = Math.max(0, Math.min(1, ratio)) * circ;
+  el.style.strokeDasharray = dash + ' ' + circ;
+  el.style.strokeDashoffset = '0';
+  el.style.transform = 'rotate(-90deg)';
+  el.style.transformOrigin = '50% 50%';
+}
+
 function loadDashboard() {
-  var today = fmtDate(new Date());
+  if (!dashDate) dashDate = new Date();
+  var dateStr = fmtDate(dashDate);
+  var isToday = (dateStr === fmtDate(new Date()));
+
+  // 更新日期顯示
+  var dd = document.getElementById('dashDate');
+  if (dd) {
+    dd.textContent = dashDate.toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
+    dd.style.color = isToday ? 'var(--primary)' : '#888';
+  }
+
+  // 停止舊的即時工時計時器
+  if (liveWorkTimer) { clearInterval(liveWorkTimer); liveWorkTimer = null; }
+
   Promise.all([
     db.collection('users').get(),
-    db.collection('records').where('date', '==', today).get()
+    db.collection('records').where('date', '==', dateStr).get()
   ]).then(function(results) {
     var empSnap = results[0], recSnap = results[1];
     var employees = empSnap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
       .filter(function(e) { return e.role === 'employee' && e.active !== false; });
     var records = recSnap.docs.map(function(d) { return d.data(); });
-    var present = 0, left = 0;
+    var total = employees.length;
+    var present = 0, left = 0, absent = 0;
+
+    // 判斷是否已過上班時間（用第一個班別開始時間判斷）
+    var now = new Date();
+    var nowMin = now.getHours() * 60 + now.getMinutes();
+    var firstShiftStart = sysSettings.shifts && sysSettings.shifts[0]
+      ? (function(s){ var p=s.start.split(':'); return parseInt(p[0])*60+parseInt(p[1]); })(sysSettings.shifts[0])
+      : 9 * 60;
+    var isLate = isToday && (nowMin > firstShiftStart + 15); // 超過上班時間 15 分鐘後才標記遲到
+
+    dashAllRows = [];
     employees.forEach(function(e) {
-      var r = records.find(function(r) { return r.empId === e.id; });
-      if (r && r.clockIn && r.clockOut) left++;
-      else if (r && r.clockIn) present++;
+      var r = records.find(function(rec) { return rec.empId === e.id; });
+      var status = 'absent';
+      if (r && r.clockIn && r.clockOut) status = 'left';
+      else if (r && r.clockIn) status = 'present';
+      if (status === 'present') present++;
+      else if (status === 'left') left++;
+      else absent++;
+      dashAllRows.push({ emp: e, rec: r, status: status, isLate: isLate });
     });
-    document.getElementById('kpiTotal').textContent   = employees.length;
+
+    // 更新 KPI
+    document.getElementById('kpiTotal').textContent   = total;
     document.getElementById('kpiPresent').textContent = present;
     document.getElementById('kpiLeft').textContent    = left;
-    document.getElementById('kpiAbsent').textContent  = employees.length - present - left;
-    var html = '';
-    employees.forEach(function(e) {
-      var r  = records.find(function(r) { return r.empId === e.id; });
-      var ci = (r && r.clockIn)  || '--';
-      var co = (r && r.clockOut) || '--';
-      var h  = (r && r.clockIn && r.clockOut) ? calcHoursStr(r.clockIn, r.clockOut) : '--';
-      var badge = '<span class="badge badge-gray">未打卡</span>';
-      if (r && r.clockIn && r.clockOut) badge = '<span class="badge badge-blue">已下班</span>';
-      else if (r && r.clockIn)          badge = '<span class="badge badge-green">上班中</span>';
-      html += '<tr><td><strong>' + e.name + '</strong></td><td>' + (e.dept||'') + '</td><td>' + ci + '</td><td>' + co + '</td><td>' + h + '</td><td>' + badge + '</td></tr>';
-    });
-    document.getElementById('dashBody').innerHTML = html || '<tr><td colspan="6" class="empty-row">今日尚無出勤記錄</td></tr>';
+    document.getElementById('kpiAbsent').textContent  = absent;
+
+    // 環形進度條
+    var t = total || 1;
+    setRing('ringTotal',   1);
+    setRing('ringPresent', present / t);
+    setRing('ringLeft',    left    / t);
+    setRing('ringAbsent',  absent  / t);
+
+    // 渲染表格
+    renderDashTable();
+
+    // 即時工時：每分鐘更新一次
+    if (isToday && present > 0) {
+      liveWorkTimer = setInterval(function() {
+        document.querySelectorAll('.live-work-cell').forEach(function(cell) {
+          var ci = cell.getAttribute('data-ci');
+          if (ci) cell.textContent = '已工作 ' + calcLiveHours(ci);
+        });
+      }, 60000);
+    }
   });
 }
+
+function calcLiveHours(clockIn) {
+  var now = new Date();
+  var parts = clockIn.split(':');
+  var startMin = parseInt(parts[0]) * 60 + parseInt(parts[1]);
+  var nowMin   = now.getHours() * 60 + now.getMinutes();
+  var diff = nowMin - startMin;
+  if (diff < 0) return '0 時 0 分';
+  return Math.floor(diff/60) + ' 時 ' + (diff%60) + ' 分';
+}
+
+function renderDashTable(filter) {
+  filter = filter || 'all';
+  var rows = dashAllRows;
+  if (filter !== 'all') rows = rows.filter(function(row) { return row.status === filter; });
+
+  // 排序
+  if (dashSortCol) {
+    rows = rows.slice().sort(function(a, b) {
+      var va = dashSortCol === 'name' ? (a.emp.name||'') : (a.emp.dept||'');
+      var vb = dashSortCol === 'name' ? (b.emp.name||'') : (b.emp.dept||'');
+      return dashSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    });
+  }
+
+  var dateStr = fmtDate(dashDate || new Date());
+  var isToday = (dateStr === fmtDate(new Date()));
+  var html = '';
+  rows.forEach(function(row) {
+    var e = row.emp, r = row.rec, status = row.status;
+    var ci = (r && r.clockIn)  || '--';
+    var co = (r && r.clockOut) || '--';
+    var dept = e.dept ? e.dept : '<span class="text-missing">未設定</span>';
+
+    // 工時顯示
+    var hCell = '';
+    if (r && r.clockIn && r.clockOut) {
+      hCell = calcHoursStr(r.clockIn, r.clockOut);
+      if (r.isManual) hCell += ' <span class="badge badge-manual">補登</span>';
+    } else if (r && r.clockIn && isToday) {
+      hCell = '<span class="live-work-cell" data-ci="' + r.clockIn + '">已工作 ' + calcLiveHours(r.clockIn) + '</span>';
+    } else {
+      hCell = '--';
+    }
+
+    // 狀態標籤
+    var badge = '';
+    if (status === 'left') {
+      badge = '<span class="badge badge-blue">已下班</span>';
+    } else if (status === 'present') {
+      badge = '<span class="badge badge-green">上班中</span>';
+    } else {
+      // 未打卡：超過上班時間則顯示警示色
+      if (row.isLate) {
+        badge = '<span class="badge badge-late">未出勤</span>';
+      } else {
+        badge = '<span class="badge badge-gray">未打卡</span>';
+      }
+    }
+
+    // 補打卡按鈕
+    var manualBtn = '<button class="btn btn-sm btn-outline" onclick="openManualClock(\''+e.id+'\',\''+e.name+'\')">補登</button>';
+
+    html += '<tr data-status="' + status + '">';
+    html += '<td><strong>' + e.name + '</strong></td>';
+    html += '<td>' + dept + '</td>';
+    html += '<td>' + ci + '</td>';
+    html += '<td>' + co + '</td>';
+    html += '<td>' + hCell + '</td>';
+    html += '<td>' + badge + '</td>';
+    html += '<td>' + manualBtn + '</td>';
+    html += '</tr>';
+  });
+  document.getElementById('dashBody').innerHTML = html || '<tr><td colspan="7" class="empty-row">沒有符合條件的記錄</td></tr>';
+}
+window.renderDashTable = renderDashTable;
+
+// 表格過濾
+var dashCurrentFilter = 'all';
+function filterDashTable(filter, el) {
+  dashCurrentFilter = filter;
+  document.querySelectorAll('.dash-tab').forEach(function(t) { t.classList.remove('active'); });
+  if (el) el.classList.add('active');
+  renderDashTable(filter);
+}
+window.filterDashTable = filterDashTable;
+
+// 表格排序
+function sortDashTable(col) {
+  if (dashSortCol === col) {
+    dashSortAsc = !dashSortAsc;
+  } else {
+    dashSortCol = col;
+    dashSortAsc = true;
+  }
+  renderDashTable(dashCurrentFilter);
+}
+window.sortDashTable = sortDashTable;
+
+// 補打卡彈窗
+function openManualClock(empId, empName) {
+  var dateStr = fmtDate(dashDate || new Date());
+  document.getElementById('manualEmpInfo').innerHTML =
+    '<div class="manual-emp-badge">' + empName[0] + '</div><div><strong>' + empName + '</strong><br><span style="font-size:12px;color:#888;">補登日期：' + dateStr + '</span></div>';
+  document.getElementById('manualDate').value = dateStr;
+  document.getElementById('manualClockIn').value  = '';
+  document.getElementById('manualClockOut').value = '';
+  document.getElementById('manualNote').value     = '';
+  document.getElementById('manualClockError').style.display = 'none';
+
+  // 填充班別選單
+  var sel = document.getElementById('manualShift');
+  sel.innerHTML = '';
+  (sysSettings.shifts || [{ name: '正常班', start: '09:00', end: '18:00' }]).forEach(function(s, i) {
+    sel.add(new Option(s.name + '（' + s.start + '–' + s.end + '）', i));
+  });
+
+  // 儲存哪個員工
+window._manualEmpId   = empId;
+  window._manualEmpName = empName;
+  document.getElementById('manualClockModal').style.display = 'flex';
+}
+window.openManualClock = openManualClock;
+
+function saveManualClock() {
+  var empId    = window._manualEmpId;
+  var empName  = window._manualEmpName;
+  var date     = document.getElementById('manualDate').value;
+  var shiftIdx = parseInt(document.getElementById('manualShift').value) || 0;
+  var ci       = document.getElementById('manualClockIn').value;
+  var co       = document.getElementById('manualClockOut').value;
+  var note     = document.getElementById('manualNote').value.trim();
+  var errEl    = document.getElementById('manualClockError');
+  if (!date) { showError(errEl, '請選擇日期'); return; }
+  if (!ci)   { showError(errEl, '請填寫上班時間'); return; }
+  errEl.style.display = 'none';
+
+  var recId = date + '_' + empId;
+  var shift = (sysSettings.shifts || [])[shiftIdx] || { name: '正常班', start: '09:00', end: '18:00' };
+
+  // 先取得員工資料
+  db.collection('users').doc(empId).get().then(function(snap) {
+    var empData = snap.exists ? snap.data() : {};
+    var payload = {
+      empId:      empId,
+      empName:    empName,
+      empDept:    empData.dept || '',
+      date:       date,
+      clockIn:    ci,
+      clockOut:   co || null,
+      shiftName:  shift.name,
+      shiftStart: shift.start,
+      shiftEnd:   shift.end,
+      lat: null, lng: null,
+      isManual:   true,
+      note:       note || '手動補登',
+      createdAt:  firebase.firestore.FieldValue.serverTimestamp()
+    };
+    return db.collection('records').doc(recId).set(payload, { merge: true });
+  }).then(function() {
+    showToast('補登記錄已儲存', 'success');
+    closeModal('manualClockModal');
+    loadDashboard();
+  }).catch(function(e) {
+    showError(errEl, '儲存失敗：' + e.message);
+  });
+}
+window.saveManualClock = saveManualClock;
 
 function loadRecords() {
   var month     = document.getElementById('recMonth').value;
