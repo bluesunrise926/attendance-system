@@ -138,6 +138,13 @@
         <span id="gpsText">正在取得位置...</span>
       </div>
 
+      <!-- 班別選擇（多班別時顯示） -->
+      <div id="shiftSelectBar" style="display:none;" class="shift-select-bar">
+        <span class="shift-select-label">📅 班別</span>
+        <select id="empShiftSel" class="shift-select-input" onchange="onShiftChange()">
+        </select>
+      </div>
+
       <div class="punch-grid">
         <button class="punch-btn punch-in" id="btnIn" onclick="doClock('in')">
           <div class="punch-icon">▶</div>
@@ -266,7 +273,7 @@
             <table class="dt">
               <thead><tr>
                 <th>日期</th><th>員工</th><th>部門</th>
-                <th>上班</th><th>下班</th><th>工時</th>
+                <th>班別</th><th>上班</th><th>下班</th><th>工時</th>
                 <th>GPS 位置</th><th>備註</th>
               </tr></thead>
               <tbody id="recBody"></tbody>
@@ -326,18 +333,16 @@
           </div>
         </div>
         <div class="card settings-card">
-          <h3>🕘 上下班時間設定</h3>
-          <div class="form-row-2">
-            <div class="form-group">
-              <label>正常上班時間</label>
-              <input type="time" id="sWorkStart" value="09:00">
-            </div>
-            <div class="form-group">
-              <label>正常下班時間</label>
-              <input type="time" id="sWorkEnd" value="18:00">
-            </div>
+          <h3>🕘 班別時段設定</h3>
+          <p class="card-desc">可設定多個班別（如早班、晚班），員工打卡時可選擇對應班別。系統將依班別顯示上下班時間提示。</p>
+          <div id="shiftsContainer">
+            <!-- 班別列表由 JS 動態產生 -->
           </div>
-          <button class="btn btn-primary" onclick="saveTimeSettings()">儲存時間設定</button>
+          <div class="btn-row" style="margin-top:12px;">
+            <button class="btn btn-outline" onclick="addShiftRow()">＋ 新增班別</button>
+            <button class="btn btn-primary" onclick="saveShiftSettings()">儲存班別設定</button>
+          </div>
+          <p class="field-hint" style="margin-top:10px;">💡 至少保留一個班別。員工打卡時若只有一個班別，系統將自動套用，無需手動選擇。</p>
         </div>
       </section>
 
