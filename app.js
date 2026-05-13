@@ -45,8 +45,15 @@ var sysSettings = {
   lng: 120.643300,
   radius: 50,
   workStart: '09:00',
-  workEnd: '18:00'
+  workEnd: '18:00',
+  shifts: [
+    { name: '早班', start: '09:00', end: '14:00' },
+    { name: '晚班', start: '17:00', end: '22:00' }
+  ]
 };
+
+// 目前員工選擇的班別索引
+var currentShiftIndex = 0;
 
 // ============================================================
 // 頁面載入
@@ -334,9 +341,58 @@ function initEmployee() {
   document.getElementById('userAvatarEmp').textContent = (currentUserData.name || '員')[0];
   startClock();
   getGPS();
+  initShiftSelector();
   loadTodayStatus();
   populateMonthSel('myMonthSel');
 }
+
+// 初始化班別選擇器
+function initShiftSelector() {
+  var shifts = sysSettings.shifts || [];
+  var bar    = document.getElementById('shiftSelectBar');
+  var sel    = document.getElementById('empShiftSel');
+  if (!sel) return;
+
+  sel.innerHTML = '';
+  if (shifts.length <= 1) {
+    // 只有一個班別時自動套用，不顯示選擇列
+    bar.style.display = 'none';
+    currentShiftIndex = 0;
+  } else {
+    // 多班別：顯示選擇列
+    bar.style.display = 'flex';
+    shifts.forEach(function(s, i) {
+      var opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = s.name + '（' + s.start + ' – ' + s.end + '）';
+      sel.appendChild(opt);
+    });
+    // 依目前時間自動建議班別
+    var now = new Date();
+    var nowMin = now.getHours() * 60 + now.getMinutes();
+    var best = 0;
+    var bestDiff = Infinity;
+    shifts.forEach(function(s, i) {
+      var parts = s.start.split(':');
+      var startMin = parseInt(parts[0]) * 60 + parseInt(parts[1]);
+      var diff = Math.abs(nowMin - startMin);
+      if (diff < bestDiff) { bestDiff = diff; best = i; }
+    });
+    sel.value = best;
+    currentShiftIndex = best;
+  }
+}
+
+function onShiftChange() {
+  var sel = document.getElementById('empShiftSel');
+  currentShiftIndex = parseInt(sel.value) || 0;
+  // 更新狀態列的班別提示
+  var shift = (sysSettings.shifts || [])[currentShiftIndex];
+  var sub = document.getElementById('statusSub');
+  if (sub && shift) sub.textContent = '班別：' + shift.name + '（' + shift.start + ' – ' + shift.end + '）';
+}
+
+window.onShiftChange = onShiftChange;
 
 function startClock() {
   if (clockTimer) clearInterval(clockTimer);
@@ -396,7 +452,13 @@ function loadTodayStatus() {
     var summary = document.getElementById('todaySummary');
     if (!rec) {
       icon.textContent = '📋'; text.textContent = '今日尚未打卡';
-      sub.textContent = '正常上班時間：' + sysSettings.workStart;
+      var shifts = sysSettings.shifts || [];
+      var curShift = shifts[currentShiftIndex];
+      if (curShift) {
+        sub.textContent = '班別：' + curShift.name + '（' + curShift.start + ' – ' + curShift.end + '）';
+      } else {
+        sub.textContent = '上班時間：' + (sysSettings.workStart || '09:00');
+      }
       btnIn.disabled = false; btnOut.disabled = true;
       summary.style.display = 'none';
     } else if (rec.clockIn && !rec.clockOut) {
@@ -439,15 +501,21 @@ function doClock(type) {
   btn.disabled = true;
   btn.querySelector('.punch-label').textContent = '打卡中...';
 
+  var shifts = sysSettings.shifts || [];
+  var curShift = shifts[currentShiftIndex] || { name: '正常班', start: sysSettings.workStart || '09:00', end: sysSettings.workEnd || '18:00' };
+
   var promise;
   if (type === 'in') {
     promise = db.collection('records').doc(recId).set({
-      empId:   currentUser.uid,
-      empName: currentUserData.name,
-      empDept: currentUserData.dept || '',
-      date:    today,
-      clockIn: timeStr,
-      clockOut: null,
+      empId:     currentUser.uid,
+      empName:   currentUserData.name,
+      empDept:   currentUserData.dept || '',
+      date:      today,
+      clockIn:   timeStr,
+      clockOut:  null,
+      shiftName: curShift.name,
+      shiftStart: curShift.start,
+      shiftEnd:   curShift.end,
       lat: currentPosition ? currentPosition.latitude  : null,
       lng: currentPosition ? currentPosition.longitude : null,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -565,11 +633,12 @@ function loadRecords() {
       if (empFilter) records = records.filter(function(r) { return r.empId === empFilter; });
       var html = '';
       records.forEach(function(r) {
-        var h   = r.clockIn && r.clockOut ? calcHoursStr(r.clockIn, r.clockOut) : '--';
-        var loc = r.lat ? (r.lat.toFixed(4) + ', ' + r.lng.toFixed(4)) : '無位置';
-        html += '<tr><td>' + r.date + '</td><td>' + (r.empName||'') + '</td><td>' + (r.empDept||'') + '</td><td>' + (r.clockIn||'--') + '</td><td>' + (r.clockOut||'--') + '</td><td>' + h + '</td><td style="font-size:12px;color:#999;">' + loc + '</td><td>' + (r.note||'') + '</td></tr>';
+        var h    = r.clockIn && r.clockOut ? calcHoursStr(r.clockIn, r.clockOut) : '--';
+        var loc  = r.lat ? (r.lat.toFixed(4) + ', ' + r.lng.toFixed(4)) : '無位置';
+        var shift = r.shiftName ? ('<span class="badge badge-blue">' + r.shiftName + '</span>') : '<span class="badge badge-gray">未指定</span>';
+        html += '<tr><td>' + r.date + '</td><td>' + (r.empName||'') + '</td><td>' + (r.empDept||'') + '</td><td>' + shift + '</td><td>' + (r.clockIn||'--') + '</td><td>' + (r.clockOut||'--') + '</td><td>' + h + '</td><td style="font-size:12px;color:#999;">' + loc + '</td><td>' + (r.note||'') + '</td></tr>';
       });
-      document.getElementById('recBody').innerHTML = html || '<tr><td colspan="8" class="empty-row">本月無出勤記錄</td></tr>';
+      document.getElementById('recBody').innerHTML = html || '<tr><td colspan="9" class="empty-row">本月無出勤記錄</td></tr>';
     });
 }
 
@@ -713,13 +782,84 @@ function toggleEmpStatus(uid, currentActive) {
 }
 
 function loadSettingsForm() {
-  document.getElementById('sLocName').value   = sysSettings.locationName;
-  document.getElementById('sLat').value       = sysSettings.lat;
-  document.getElementById('sLng').value       = sysSettings.lng;
-  document.getElementById('sRadius').value    = sysSettings.radius;
-  document.getElementById('sWorkStart').value = sysSettings.workStart;
-  document.getElementById('sWorkEnd').value   = sysSettings.workEnd;
+  document.getElementById('sLocName').value = sysSettings.locationName;
+  document.getElementById('sLat').value     = sysSettings.lat;
+  document.getElementById('sLng').value     = sysSettings.lng;
+  document.getElementById('sRadius').value  = sysSettings.radius;
+  renderShiftRows();
 }
+
+// 班別列表渲染
+function renderShiftRows() {
+  var container = document.getElementById('shiftsContainer');
+  if (!container) return;
+  var shifts = sysSettings.shifts || [{ name: '正常班', start: '09:00', end: '18:00' }];
+  var html = '';
+  shifts.forEach(function(s, i) {
+    html += '<div class="shift-row" id="shiftRow_' + i + '">';
+    html += '<div class="shift-row-name"><input type="text" class="shift-input" id="sShiftName_' + i + '" value="' + s.name + '" placeholder="班別名稱"></div>';
+    html += '<div class="shift-row-time">';
+    html += '<span class="shift-time-label">上班</span><input type="time" class="shift-input" id="sShiftStart_' + i + '" value="' + s.start + '">';
+    html += '<span class="shift-time-sep">–</span>';
+    html += '<span class="shift-time-label">下班</span><input type="time" class="shift-input" id="sShiftEnd_' + i + '" value="' + s.end + '">';
+    html += '</div>';
+    if (shifts.length > 1) {
+      html += '<button class="btn btn-sm btn-danger shift-del-btn" onclick="removeShiftRow(' + i + ')">刪除</button>';
+    } else {
+      html += '<span class="shift-del-placeholder"></span>';
+    }
+    html += '</div>';
+  });
+  container.innerHTML = html;
+}
+
+// 新增班別列
+function addShiftRow() {
+  var shifts = sysSettings.shifts || [];
+  shifts.push({ name: '新班別', start: '09:00', end: '18:00' });
+  sysSettings.shifts = shifts;
+  renderShiftRows();
+}
+
+// 刪除班別列
+function removeShiftRow(index) {
+  var shifts = sysSettings.shifts || [];
+  if (shifts.length <= 1) { showToast('至少需保留一個班別', 'error'); return; }
+  shifts.splice(index, 1);
+  sysSettings.shifts = shifts;
+  renderShiftRows();
+}
+
+// 儲存班別設定
+function saveShiftSettings() {
+  var container = document.getElementById('shiftsContainer');
+  var rows = container.querySelectorAll('.shift-row');
+  var shifts = [];
+  var valid = true;
+  rows.forEach(function(row, i) {
+    var name  = document.getElementById('sShiftName_'  + i).value.trim();
+    var start = document.getElementById('sShiftStart_' + i).value;
+    var end   = document.getElementById('sShiftEnd_'   + i).value;
+    if (!name)  { showToast('班別名稱不能為空', 'error'); valid = false; return; }
+    if (!start || !end) { showToast('請填寫完整的上下班時間', 'error'); valid = false; return; }
+    shifts.push({ name: name, start: start, end: end });
+  });
+  if (!valid || shifts.length === 0) return;
+  sysSettings.shifts    = shifts;
+  // 對齊舊欄位（相容性）
+  sysSettings.workStart = shifts[0].start;
+  sysSettings.workEnd   = shifts[0].end;
+  db.collection('settings').doc('main').set(sysSettings, { merge: true })
+    .then(function() {
+      showToast('班別設定已儲存', 'success');
+      renderShiftRows();
+    })
+    .catch(function() { showToast('儲存失敗，請確認網路連線', 'error'); });
+}
+
+window.addShiftRow    = addShiftRow;
+window.removeShiftRow = removeShiftRow;
+window.saveShiftSettings = saveShiftSettings;
 
 function saveGPSSettings() {
   var settings = {
@@ -736,14 +876,8 @@ function saveGPSSettings() {
 }
 
 function saveTimeSettings() {
-  var settings = {
-    workStart: document.getElementById('sWorkStart').value,
-    workEnd:   document.getElementById('sWorkEnd').value,
-  };
-  sysSettings = Object.assign({}, sysSettings, settings);
-  db.collection('settings').doc('main').set(sysSettings, { merge: true })
-    .then(function() { showToast('時間設定已儲存', 'success'); })
-    .catch(function() { showToast('儲存失敗，請確認網路連線', 'error'); });
+  // 已被 saveShiftSettings 取代，保留相容
+  saveShiftSettings();
 }
 
 function useMyLocation() {
@@ -769,10 +903,10 @@ function exportAttendanceCSV() {
     .then(function(snap) {
       var records = snap.docs.map(function(d) { return d.data(); });
       if (empFilter) records = records.filter(function(r) { return r.empId === empFilter; });
-      var csv = '\uFEFF日期,員工姓名,部門,上班時間,下班時間,工作時數（小時）,打卡緯度,打卡經度\n';
+      var csv = '\uFEFF日期,員工姓名,部門,班別,上班時間,下班時間,工作時數（小時）,打卡緯度,打卡經度\n';
       records.forEach(function(r) {
         var h = r.clockIn && r.clockOut ? calcHoursDec(r.clockIn, r.clockOut).toFixed(2) : '';
-        csv += r.date + ',' + (r.empName||'') + ',' + (r.empDept||'') + ',' + (r.clockIn||'') + ',' + (r.clockOut||'') + ',' + h + ',' + (r.lat||'') + ',' + (r.lng||'') + '\n';
+        csv += r.date + ',' + (r.empName||'') + ',' + (r.empDept||'') + ',' + (r.shiftName||'') + ',' + (r.clockIn||'') + ',' + (r.clockOut||'') + ',' + h + ',' + (r.lat||'') + ',' + (r.lng||'') + '\n';
       });
       dlCSV(csv, '出勤記錄_' + month + '.csv');
       showToast('出勤報表匯出成功', 'success');
@@ -917,6 +1051,9 @@ window.loadMyRecords      = loadMyRecords;
 window.loadRecords        = loadRecords;
 window.saveGPSSettings    = saveGPSSettings;
 window.saveTimeSettings   = saveTimeSettings;
+window.saveShiftSettings  = saveShiftSettings;
+window.addShiftRow        = addShiftRow;
+window.removeShiftRow     = removeShiftRow;
 window.useMyLocation      = useMyLocation;
 window.exportAttendanceCSV  = exportAttendanceCSV;
 window.exportWorkStatsCSV   = exportWorkStatsCSV;
