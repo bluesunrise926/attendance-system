@@ -409,10 +409,8 @@ function initShiftSelector() {
 function onShiftChange() {
   var sel = document.getElementById('empShiftSel');
   currentShiftIndex = parseInt(sel.value) || 0;
-  // 更新狀態列的班別提示
-  var shift = (sysSettings.shifts || [])[currentShiftIndex];
-  var sub = document.getElementById('statusSub');
-  if (sub && shift) sub.textContent = '班別：' + shift.name + '（' + shift.start + ' – ' + shift.end + '）';
+  // 切換班別後重新載入該班打卡狀態
+  loadTodayStatus();
 }
 
 window.onShiftChange = onShiftChange;
@@ -433,65 +431,116 @@ function updateClock() {
   if (dd) dd.textContent = now.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-function getGPS() {
+function getGPS(onSuccess) {
   var gpsText = document.getElementById('gpsText');
   var gpsIcon = document.getElementById('gpsIcon');
-  if (!navigator.geolocation) { gpsText.textContent = '裝置不支援 GPS 定位'; return; }
+  if (!navigator.geolocation) {
+    gpsText.textContent = '裝置不支援 GPS 定位';
+    gpsText.style.color = '#e63946';
+    gpsIcon.textContent = '❌';
+    return;
+  }
   gpsText.textContent = '正在取得位置...';
+  gpsText.style.color = 'rgba(255,255,255,0.8)';
+  gpsIcon.textContent = '📍';
+
   navigator.geolocation.getCurrentPosition(
     function(pos) {
       currentPosition = pos.coords;
       var dist = calcDist(pos.coords.latitude, pos.coords.longitude, sysSettings.lat, sysSettings.lng);
       if (dist <= sysSettings.radius) {
-        gpsText.textContent = '位置確認：' + sysSettings.locationName + '（' + Math.round(dist) + ' 公尺）';
+        gpsText.textContent = '✅ 位置確認：' + sysSettings.locationName + '（' + Math.round(dist) + ' 公尺）';
         gpsText.style.color = '#2ec4b6';
         gpsIcon.textContent = '✅';
       } else {
-        gpsText.textContent = '位置不符：距工作地點 ' + Math.round(dist) + ' 公尺（允許 ' + sysSettings.radius + ' 公尺）';
+        gpsText.textContent = '⚠️ 位置不符：距工作地點 ' + Math.round(dist) + ' 公尺（允許 ' + sysSettings.radius + ' 公尺）';
         gpsText.style.color = '#e63946';
         gpsIcon.textContent = '⚠️';
       }
+      if (typeof onSuccess === 'function') onSuccess(pos.coords);
+    },
+    function(err) {
+      currentPosition = null;
+      if (err.code === 1) {
+        // 使用者拒絕授權
+        gpsText.innerHTML = '⛔ 定位權限未開啟，<strong style="color:#fff;text-decoration:underline;cursor:pointer;" onclick="requestGPSPermission()">點此重新授權</strong>';
+        gpsText.style.color = '#e63946';
+        gpsIcon.textContent = '🔒';
+        showGPSPermissionBanner();
+      } else {
+        gpsText.textContent = '❓ 無法取得位置，請確認定位已開啟';
+        gpsText.style.color = '#f77f00';
+        gpsIcon.textContent = '❓';
+      }
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
+  );
+}
+
+// 強制重新請求定位授權
+function requestGPSPermission() {
+  var gpsText = document.getElementById('gpsText');
+  var gpsIcon = document.getElementById('gpsIcon');
+  gpsText.textContent = '正在請求定位授權...';
+  gpsText.style.color = 'rgba(255,255,255,0.8)';
+  gpsIcon.textContent = '📍';
+  // 再次呼叫 getCurrentPosition 會觸發系統授權彈窗
+  navigator.geolocation.getCurrentPosition(
+    function(pos) {
+      currentPosition = pos.coords;
+      hideGPSPermissionBanner();
+      getGPS();
     },
     function() {
-      currentPosition = null;
-      gpsText.textContent = '無法取得位置（請開啟定位權限）';
-      gpsText.style.color = '#f77f00';
-      gpsIcon.textContent = '❓';
+      gpsText.textContent = '⛔ 請至手機設定 → 隱私權 → 定位服務，開啟瀏覽器定位權限';
+      gpsText.style.color = '#e63946';
     },
-    { enableHighAccuracy: true, timeout: 15000 }
+    { enableHighAccuracy: true, timeout: 10000 }
   );
+}
+window.requestGPSPermission = requestGPSPermission;
+
+function showGPSPermissionBanner() {
+  var banner = document.getElementById('gpsBanner');
+  if (banner) banner.style.display = 'flex';
+}
+function hideGPSPermissionBanner() {
+  var banner = document.getElementById('gpsBanner');
+  if (banner) banner.style.display = 'none';
 }
 
 function loadTodayStatus() {
   var today = fmtDate(new Date());
-  var recId = today + '_' + currentUser.uid;
+  var shifts = sysSettings.shifts || [];
+  var curShift = shifts[currentShiftIndex] || { name: '正常班', start: '09:00', end: '18:00' };
+  // 每個班別有獨立的記錄 ID：日期_員工UID_班別索引
+  var recId = today + '_' + currentUser.uid + '_' + currentShiftIndex;
+
+  var icon    = document.getElementById('statusIcon');
+  var text    = document.getElementById('statusText');
+  var sub     = document.getElementById('statusSub');
+  var btnIn   = document.getElementById('btnIn');
+  var btnOut  = document.getElementById('btnOut');
+  var summary = document.getElementById('todaySummary');
+
   db.collection('records').doc(recId).get().then(function(snap) {
-    var rec    = snap.exists ? snap.data() : null;
-    var icon   = document.getElementById('statusIcon');
-    var text   = document.getElementById('statusText');
-    var sub    = document.getElementById('statusSub');
-    var btnIn  = document.getElementById('btnIn');
-    var btnOut = document.getElementById('btnOut');
-    var summary = document.getElementById('todaySummary');
+    var rec = snap.exists ? snap.data() : null;
     if (!rec) {
-      icon.textContent = '📋'; text.textContent = '今日尚未打卡';
-      var shifts = sysSettings.shifts || [];
-      var curShift = shifts[currentShiftIndex];
-      if (curShift) {
-        sub.textContent = '班別：' + curShift.name + '（' + curShift.start + ' – ' + curShift.end + '）';
-      } else {
-        sub.textContent = '上班時間：' + (sysSettings.workStart || '09:00');
-      }
+      icon.textContent = '📋';
+      text.textContent = '本班尚未打卡';
+      sub.textContent  = curShift.name + '（' + curShift.start + ' – ' + curShift.end + '）';
       btnIn.disabled = false; btnOut.disabled = true;
       summary.style.display = 'none';
     } else if (rec.clockIn && !rec.clockOut) {
-      icon.textContent = '✅'; text.textContent = '已上班打卡';
-      sub.textContent = '上班時間：' + rec.clockIn;
+      icon.textContent = '✅';
+      text.textContent = '已上班打卡';
+      sub.textContent  = curShift.name + ' 上班：' + rec.clockIn;
       btnIn.disabled = true; btnOut.disabled = false;
       showSummary(rec.clockIn, null);
     } else if (rec.clockIn && rec.clockOut) {
-      icon.textContent = '🏠'; text.textContent = '今日已完成打卡';
-      sub.textContent = '工作時數：' + calcHoursStr(rec.clockIn, rec.clockOut);
+      icon.textContent = '🏠';
+      text.textContent = '本班已完成打卡';
+      sub.textContent  = curShift.name + ' 工時：' + calcHoursStr(rec.clockIn, rec.clockOut);
       btnIn.disabled = true; btnOut.disabled = true;
       showSummary(rec.clockIn, rec.clockOut);
     }
@@ -506,18 +555,22 @@ function showSummary(clockIn, clockOut) {
 }
 
 function doClock(type) {
-  var now    = new Date();
-  var today  = fmtDate(now);
+  var now     = new Date();
+  var today   = fmtDate(now);
   var timeStr = now.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit' });
-  var recId  = today + '_' + currentUser.uid;
+  // 每個班別獨立記錄：日期_員工UID_班別索引
+  var recId   = today + '_' + currentUser.uid + '_' + currentShiftIndex;
 
-  // 強制 GPS 驗證：必須在指定範圍內才能打卡，不允許繞過
+  // 若尚未取得 GPS，先強制請求授權再打卡
   if (!currentPosition) {
-    showToast('無法取得 GPS 位置，請開啟手機定位權限後再試', 'error');
-    getGPS();
+    showToast('請先允許定位授權才能打卡', 'error');
+    showGPSPermissionBanner();
+    // 嘗試重新取得，取得後自動繼續打卡
+    getGPS(function() { doClock(type); });
     return;
   }
 
+  // 強制範圍驗證
   var dist = calcDist(currentPosition.latitude, currentPosition.longitude, sysSettings.lat, sysSettings.lng);
   if (dist > sysSettings.radius) {
     showToast('⛔ 位置不符！距工作地點 ' + Math.round(dist) + ' 公尺，需在 ' + sysSettings.radius + ' 公尺範圍內才可打卡', 'error');
@@ -528,24 +581,25 @@ function doClock(type) {
   btn.disabled = true;
   btn.querySelector('.punch-label').textContent = '打卡中...';
 
-  var shifts = sysSettings.shifts || [];
+  var shifts   = sysSettings.shifts || [];
   var curShift = shifts[currentShiftIndex] || { name: '正常班', start: sysSettings.workStart || '09:00', end: sysSettings.workEnd || '18:00' };
 
   var promise;
   if (type === 'in') {
     promise = db.collection('records').doc(recId).set({
-      empId:     currentUser.uid,
-      empName:   currentUserData.name,
-      empDept:   currentUserData.dept || '',
-      date:      today,
-      clockIn:   timeStr,
-      clockOut:  null,
-      shiftName: curShift.name,
+      empId:      currentUser.uid,
+      empName:    currentUserData.name,
+      empDept:    currentUserData.dept || '',
+      date:       today,
+      shiftIndex: currentShiftIndex,
+      shiftName:  curShift.name,
       shiftStart: curShift.start,
       shiftEnd:   curShift.end,
-      lat: currentPosition ? currentPosition.latitude  : null,
-      lng: currentPosition ? currentPosition.longitude : null,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      clockIn:    timeStr,
+      clockOut:   null,
+      lat:        currentPosition.latitude,
+      lng:        currentPosition.longitude,
+      createdAt:  firebase.firestore.FieldValue.serverTimestamp()
     });
   } else {
     promise = db.collection('records').doc(recId).update({
@@ -555,9 +609,9 @@ function doClock(type) {
   }
 
   promise.then(function() {
-    showToast((type === 'in' ? '上班' : '下班') + '打卡成功！' + timeStr, 'success');
+    showToast(curShift.name + ' ' + (type === 'in' ? '上班' : '下班') + '打卡成功！' + timeStr, 'success');
     loadTodayStatus();
-  }).catch(function() {
+  }).catch(function(e) {
     showToast('打卡失敗，請確認網路連線', 'error');
     btn.disabled = false;
   }).finally(function() {
@@ -576,7 +630,12 @@ function loadMyRecords() {
     .orderBy('date')
     .get()
     .then(function(snap) {
-      var records   = snap.docs.map(function(d) { return d.data(); });
+      // 依日期+班別排序
+      var records   = snap.docs.map(function(d) { return d.data(); })
+        .sort(function(a,b){
+          if (a.date !== b.date) return a.date.localeCompare(b.date);
+          return (a.shiftIndex||0) - (b.shiftIndex||0);
+        });
       var container = document.getElementById('myRecordsList');
       if (records.length === 0) {
         container.innerHTML = '<p style="text-align:center;color:#aaa;padding:16px;">本月無出勤記錄</p>';
@@ -682,14 +741,23 @@ function loadDashboard() {
 
     dashAllRows = [];
     employees.forEach(function(e) {
-      var r = records.find(function(rec) { return rec.empId === e.id; });
-      var status = 'absent';
-      if (r && r.clockIn && r.clockOut) status = 'left';
-      else if (r && r.clockIn) status = 'present';
-      if (status === 'present') present++;
-      else if (status === 'left') left++;
-      else absent++;
-      dashAllRows.push({ emp: e, rec: r, status: status, isLate: isLate });
+      // 取得該員工當天所有班別的記錄
+      var empRecs = records.filter(function(rec) { return rec.empId === e.id; })
+        .sort(function(a,b){ return (a.shiftIndex||0) - (b.shiftIndex||0); });
+
+      if (empRecs.length === 0) {
+        // 完全未打卡
+        absent++;
+        dashAllRows.push({ emp: e, rec: null, status: 'absent', isLate: isLate, multiShift: false });
+      } else {
+        // 有打卡記錄：逐班別顯示
+        empRecs.forEach(function(r) {
+          var status = 'absent';
+          if (r.clockIn && r.clockOut) { status = 'left'; left++; }
+          else if (r.clockIn) { status = 'present'; present++; }
+          dashAllRows.push({ emp: e, rec: r, status: status, isLate: isLate, multiShift: empRecs.length > 1 });
+        });
+      }
     });
 
     // 更新 KPI
@@ -753,11 +821,16 @@ function renderDashTable(filter) {
     var co = (r && r.clockOut) || '--';
     var dept = e.dept ? e.dept : '<span class="text-missing">未設定</span>';
 
+    // 班別標籤
+    var shiftBadge = r && r.shiftName
+      ? '<span class="badge badge-blue">' + r.shiftName + '</span>'
+      : '<span class="badge badge-gray">未指定</span>';
+
     // 工時顯示
     var hCell = '';
     if (r && r.clockIn && r.clockOut) {
       hCell = calcHoursStr(r.clockIn, r.clockOut);
-      if (r.isManual) hCell += ' <span class="badge badge-manual">補登</span>';
+      if (r && r.isManual) hCell += ' <span class="badge badge-manual">補登</span>';
     } else if (r && r.clockIn && isToday) {
       hCell = '<span class="live-work-cell" data-ci="' + r.clockIn + '">已工作 ' + calcLiveHours(r.clockIn) + '</span>';
     } else {
@@ -767,11 +840,10 @@ function renderDashTable(filter) {
     // 狀態標籤
     var badge = '';
     if (status === 'left') {
-      badge = '<span class="badge badge-blue">已下班</span>';
+      badge = '<span class="badge badge-teal">已下班</span>';
     } else if (status === 'present') {
       badge = '<span class="badge badge-green">上班中</span>';
     } else {
-      // 未打卡：超過上班時間則顯示警示色
       if (row.isLate) {
         badge = '<span class="badge badge-late">未出勤</span>';
       } else {
@@ -779,12 +851,14 @@ function renderDashTable(filter) {
       }
     }
 
-    // 補打卡按鈕
-    var manualBtn = '<button class="btn btn-sm btn-outline" onclick="openManualClock(\''+e.id+'\',\''+e.name+'\')">補登</button>';
+    // 補打卡按鈕（傳入班別索引）
+    var shiftIdx2 = r ? (r.shiftIndex !== undefined ? r.shiftIndex : 0) : 0;
+    var manualBtn = '<button class="btn btn-sm btn-outline" onclick="openManualClock(''+e.id+'',''+e.name+'','+shiftIdx2+')">補登</button>';
 
     html += '<tr data-status="' + status + '">';
     html += '<td><strong>' + e.name + '</strong></td>';
     html += '<td>' + dept + '</td>';
+    html += '<td>' + shiftBadge + '</td>';
     html += '<td>' + ci + '</td>';
     html += '<td>' + co + '</td>';
     html += '<td>' + hCell + '</td>';
@@ -819,7 +893,7 @@ function sortDashTable(col) {
 window.sortDashTable = sortDashTable;
 
 // 補打卡彈窗
-function openManualClock(empId, empName) {
+function openManualClock(empId, empName, shiftIdx) {
   var dateStr = fmtDate(dashDate || new Date());
   document.getElementById('manualEmpInfo').innerHTML =
     '<div class="manual-emp-badge">' + empName[0] + '</div><div><strong>' + empName + '</strong><br><span style="font-size:12px;color:#888;">補登日期：' + dateStr + '</span></div>';
@@ -829,15 +903,15 @@ function openManualClock(empId, empName) {
   document.getElementById('manualNote').value     = '';
   document.getElementById('manualClockError').style.display = 'none';
 
-  // 填充班別選單
+  // 填充班別選單，預選傳入的班別
   var sel = document.getElementById('manualShift');
   sel.innerHTML = '';
   (sysSettings.shifts || [{ name: '正常班', start: '09:00', end: '18:00' }]).forEach(function(s, i) {
     sel.add(new Option(s.name + '（' + s.start + '–' + s.end + '）', i));
   });
+  if (shiftIdx !== undefined) sel.value = shiftIdx;
 
-  // 儲存哪個員工
-window._manualEmpId   = empId;
+  window._manualEmpId   = empId;
   window._manualEmpName = empName;
   document.getElementById('manualClockModal').style.display = 'flex';
 }
@@ -856,7 +930,7 @@ function saveManualClock() {
   if (!ci)   { showError(errEl, '請填寫上班時間'); return; }
   errEl.style.display = 'none';
 
-  var recId = date + '_' + empId;
+  var recId = date + '_' + empId + '_' + shiftIdx;
   var shift = (sysSettings.shifts || [])[shiftIdx] || { name: '正常班', start: '09:00', end: '18:00' };
 
   // 先取得員工資料
@@ -873,6 +947,7 @@ function saveManualClock() {
       shiftStart: shift.start,
       shiftEnd:   shift.end,
       lat: null, lng: null,
+      shiftIndex: shiftIdx,
       isManual:   true,
       note:       note || '手動補登',
       createdAt:  firebase.firestore.FieldValue.serverTimestamp()
