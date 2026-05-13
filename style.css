@@ -320,3 +320,156 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
 
 /* 已下班標籤（藍綠色，區別於 badge-blue） */
 .badge-teal { background: #d1f0ee; color: #0e6b65; }
+
+/* ============================================================
+   加班確認彈窗（員工端）
+   ============================================================ */
+/* 使用 flex 置中，但不用全黑遮罩，改用半透明底色，避免遮住整個畫面 */
+.ot-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 9000;
+  display: flex;
+  align-items: flex-end;   /* 從底部滑入，手機友善 */
+  justify-content: center;
+  padding: 0 0 env(safe-area-inset-bottom, 0);
+  animation: otFadeIn 0.25s ease;
+}
+@keyframes otFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.ot-dialog-box {
+  background: white;
+  border-radius: 20px 20px 0 0;
+  width: 100%;
+  max-width: 480px;
+  padding: 28px 24px 32px;
+  text-align: center;
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.15);
+  animation: otSlideUp 0.3s ease;
+}
+@keyframes otSlideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+.ot-dialog-icon { font-size: 40px; margin-bottom: 10px; }
+.ot-dialog-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--dark);
+  margin-bottom: 10px;
+}
+.ot-dialog-msg {
+  font-size: 15px;
+  color: var(--text);
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+.ot-countdown-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #fff8e1;
+  border: 1px solid #ffe082;
+  border-radius: 10px;
+  padding: 10px 16px;
+  margin-bottom: 22px;
+}
+.ot-countdown-label { font-size: 13px; color: #856404; }
+.ot-countdown {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--warning);
+  font-variant-numeric: tabular-nums;
+  min-width: 52px;
+}
+.ot-dialog-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ot-btn {
+  width: 100%;
+  padding: 14px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+.ot-btn-primary {
+  background: var(--success);
+  color: white;
+}
+.ot-btn-primary:hover { background: #25a99e; }
+.ot-btn-outline {
+  background: transparent;
+  border: 2px solid var(--primary);
+  color: var(--primary);
+}
+.ot-btn-outline:hover { background: var(--primary); color: white; }
+
+/* ============================================================
+   後台加班通知面板
+   ============================================================ */
+.overtime-panel {
+  background: #fffbeb;
+  border: 1.5px solid #fde68a;
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+.overtime-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  background: #fef3c7;
+  border-bottom: 1px solid #fde68a;
+  font-size: 14px;
+  font-weight: 700;
+  color: #92400e;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.overtime-panel-hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: #b45309;
+}
+.notif-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-bottom: 1px solid #fde68a;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.notif-row:last-child { border-bottom: none; }
+.notif-row-read { opacity: 0.5; }
+.notif-info { flex: 1; }
+.notif-detail { font-size: 12px; color: #888; margin-top: 3px; }
+
+/* 側邊欄通知徽章 */
+.notif-badge {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--danger);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
