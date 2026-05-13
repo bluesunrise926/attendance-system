@@ -312,7 +312,7 @@
               <thead><tr>
                 <th onclick="sortDashTable('name')" class="sortable">員工姓名 <span class="sort-icon">⇅</span></th>
                 <th onclick="sortDashTable('dept')" class="sortable">部門 <span class="sort-icon">⇅</span></th>
-                <th>上班時間</th><th>下班時間</th><th>工時</th><th>狀態</th><th>操作</th>
+                <th>班別</th><th>上班時間</th><th>下班時間</th><th>工時</th><th>狀態</th><th>操作</th>
               </tr></thead>
               <tbody id="dashBody"></tbody>
             </table>
@@ -556,6 +556,17 @@
         <p style="font-size:12px;color:#aaa;margin-top:8px;text-align:center;">補登記錄將標註「手動補登」，保留审計記錄</p>
       </div>
     </div>
+  </div>
+
+  <!-- GPS 授權請求橫幅 -->
+  <div id="gpsBanner" style="display:none;" class="gps-banner">
+    <div class="gps-banner-icon">🔒</div>
+    <div class="gps-banner-text">
+      <strong>定位權限未開啟</strong>
+      <p>打卡需要 GPS 定位。請允許瀏覽器存取您的位置。</p>
+    </div>
+    <button class="gps-banner-btn" onclick="requestGPSPermission()">📍 重新授權</button>
+    <button class="gps-banner-close" onclick="document.getElementById('gpsBanner').style.display='none'">×</button>
   </div>
 
   <!-- Toast 通知 -->
