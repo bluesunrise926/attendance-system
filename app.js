@@ -1144,7 +1144,7 @@ function renderDashTable(filter) {
 
     // 補打卡按鈕（傳入班別索引）
     var shiftIdx2 = r ? (r.shiftIndex !== undefined ? r.shiftIndex : 0) : 0;
-    var manualBtn = '<button class="btn btn-sm btn-outline" onclick="openManualClock(''+e.id+'',''+e.name+'','+shiftIdx2+')">補登</button>';
+    var manualBtn = '<button class="btn btn-sm btn-outline" onclick="openManualClock(\'' + e.id + '\',\'' + e.name.replace(/'/g, "\\'") + '\',' + shiftIdx2 + ')">補登</button>';
 
     html += '<tr data-status="' + status + '">';
     html += '<td><strong>' + e.name + '</strong></td>';
