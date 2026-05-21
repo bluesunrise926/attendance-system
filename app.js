@@ -1270,11 +1270,29 @@ function loadRecords() {
         var h    = r.clockIn && r.clockOut ? calcHoursStr(r.clockIn, r.clockOut) : '--';
         var loc  = r.lat ? (r.lat.toFixed(4) + ', ' + r.lng.toFixed(4)) : '無位置';
         var shift = r.shiftName ? ('<span class="badge badge-blue">' + r.shiftName + '</span>') : '<span class="badge badge-gray">未指定</span>';
-        html += '<tr><td>' + r.date + '</td><td>' + (r.empName||'') + '</td><td>' + (r.empDept||'') + '</td><td>' + shift + '</td><td>' + (r.clockIn||'--') + '</td><td>' + (r.clockOut||'--') + '</td><td>' + h + '</td><td style="font-size:12px;color:#999;">' + loc + '</td><td>' + (r.note||'') + '</td></tr>';
+        var recDocId = r.date + '_' + r.empId + (r.shiftIndex !== undefined ? '_' + r.shiftIndex : '');
+        var delBtn = '<button class="btn btn-sm btn-danger" onclick="deleteRecord(\'' + recDocId + '\',\'' + (r.empName||'').replace(/'/g, "\\'") + '\',\'' + r.date + '\')">🗑 刪除</button>';
+        html += '<tr><td>' + r.date + '</td><td>' + (r.empName||'') + '</td><td>' + (r.empDept||'') + '</td><td>' + shift + '</td><td>' + (r.clockIn||'--') + '</td><td>' + (r.clockOut||'--') + '</td><td>' + h + '</td><td style="font-size:12px;color:#999;">' + loc + '</td><td>' + (r.note||'') + '</td><td>' + delBtn + '</td></tr>';
       });
-      document.getElementById('recBody').innerHTML = html || '<tr><td colspan="9" class="empty-row">本月無出勤記錄</td></tr>';
+      document.getElementById('recBody').innerHTML = html || '<tr><td colspan="10" class="empty-row">本月無出勤記錄</td></tr>';
     });
 }
+
+// ============================================================
+// 刪除打卡記錄
+// ============================================================
+function deleteRecord(recId, empName, date) {
+  if (!confirm('確定要刪除「' + empName + '」於 ' + date + ' 的打卡記錄？此操作無法復原。')) return;
+  db.collection('records').doc(recId).delete()
+    .then(function() {
+      showToast('「' + empName + '」 ' + date + ' 的打卡記錄已刪除', 'success');
+      loadRecords();
+    })
+    .catch(function(e) {
+      showToast('刪除失敗：' + e.message, 'error');
+    });
+}
+window.deleteRecord = deleteRecord;
 
 function loadEmployeeList() {
   db.collection('users').get().then(function(snap) {
