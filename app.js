@@ -1263,20 +1263,24 @@ function loadRecords() {
     .orderBy('date', 'desc')
     .get()
     .then(function(snap) {
-      var records = snap.docs.map(function(d) { return d.data(); });
+      // 使用 snap.docs 保留真實的 Firestore doc.id
+      var records = snap.docs.map(function(d) {
+        return Object.assign({ _docId: d.id }, d.data());
+      });
       if (empFilter) records = records.filter(function(r) { return r.empId === empFilter; });
       var html = '';
       records.forEach(function(r) {
         var h    = r.clockIn && r.clockOut ? calcHoursStr(r.clockIn, r.clockOut) : '--';
         var loc  = r.lat ? (r.lat.toFixed(4) + ', ' + r.lng.toFixed(4)) : '無位置';
         var shift = r.shiftName ? ('<span class="badge badge-blue">' + r.shiftName + '</span>') : '<span class="badge badge-gray">未指定</span>';
-        var recDocId = r.date + '_' + r.empId + (r.shiftIndex !== undefined ? '_' + r.shiftIndex : '');
+        // 直接使用 Firestore 真實 doc.id，不自行組合
+        var docId       = r._docId;
         var safeEmpName = (r.empName||'').replace(/'/g, "\\'");
         var safeEmpId   = r.empId || '';
         var shiftIdx3   = r.shiftIndex !== undefined ? r.shiftIndex : 0;
         var opCell = '<td class="operation-cell">' +
           '<button class="btn btn-sm btn-outline" onclick="openManualClock(\'' + safeEmpId + '\',\'' + safeEmpName + '\',' + shiftIdx3 + ')">補登</button>' +
-          '<button class="btn btn-sm btn-danger" onclick="deleteRecord(\'' + recDocId + '\',\'' + safeEmpName + '\',\'' + r.date + '\')" style="margin-left:6px;">🗑 刪除</button>' +
+          '<button class="btn btn-sm btn-danger" onclick="deleteRecord(\'' + docId + '\',\'' + safeEmpName + '\',\'' + r.date + '\')" style="margin-left:6px;background:#ff4d4f;color:white;border:none;">🗑 刪除</button>' +
           '</td>';
         html += '<tr><td>' + r.date + '</td><td>' + (r.empName||'') + '</td><td>' + (r.empDept||'') + '</td><td>' + shift + '</td><td>' + (r.clockIn||'--') + '</td><td>' + (r.clockOut||'--') + '</td><td>' + h + '</td><td style="font-size:12px;color:#999;">' + loc + '</td><td>' + (r.note||'') + '</td>' + opCell + '</tr>';
       });
