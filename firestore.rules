@@ -2,26 +2,49 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // 用戶資料：只有登入用戶可讀自己的資料，管理員可讀寫所有用戶
-    match /users/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null &&
-        (request.auth.uid == userId ||
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    // 輔助函數：判斷目前登入者是否為管理員
+    function isAdmin() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // 出勤記錄：登入用戶可讀寫
-    match /records/{recordId} {
+    // 用戶資料：
+    // - 所有登入用戶可讀（顯示員工列表）
+    // - 管理員可寫所有用戶資料
+    // - 用戶本人可寫自己的資料（自助註冊）
+    match /users/{userId} {
       allow read: if request.auth != null;
+      allow create: if request.auth != null &&
+        (request.auth.uid == userId || isAdmin());
+      allow update: if request.auth != null &&
+        (request.auth.uid == userId || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // 出勤記錄：
+    // - 所有登入用戶可讀（員工查自己的記錄、管理員查所有記錄）
+    // - 所有登入用戶可新增（員工打卡）
+    // - 所有登入用戶可更新（下班打卡更新同一筆記錄）
+    // - 只有管理員可刪除（防止員工自行刪除打卡記錄）
+    match /records/{recordId} {
+      allow read:   if request.auth != null;
       allow create: if request.auth != null;
       allow update: if request.auth != null;
+      allow delete: if isAdmin();
     }
 
     // 系統設定：只有管理員可寫，所有登入用戶可讀
     match /settings/{settingId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow read:  if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    // 通知記錄：登入用戶可讀寫（下班提醒通知）
+    match /notifications/{notifId} {
+      allow read:   if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if isAdmin();
     }
   }
 }
