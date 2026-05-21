@@ -1271,8 +1271,14 @@ function loadRecords() {
         var loc  = r.lat ? (r.lat.toFixed(4) + ', ' + r.lng.toFixed(4)) : '無位置';
         var shift = r.shiftName ? ('<span class="badge badge-blue">' + r.shiftName + '</span>') : '<span class="badge badge-gray">未指定</span>';
         var recDocId = r.date + '_' + r.empId + (r.shiftIndex !== undefined ? '_' + r.shiftIndex : '');
-        var delBtn = '<button class="btn btn-sm btn-danger" onclick="deleteRecord(\'' + recDocId + '\',\'' + (r.empName||'').replace(/'/g, "\\'") + '\',\'' + r.date + '\')">🗑 刪除</button>';
-        html += '<tr><td>' + r.date + '</td><td>' + (r.empName||'') + '</td><td>' + (r.empDept||'') + '</td><td>' + shift + '</td><td>' + (r.clockIn||'--') + '</td><td>' + (r.clockOut||'--') + '</td><td>' + h + '</td><td style="font-size:12px;color:#999;">' + loc + '</td><td>' + (r.note||'') + '</td><td>' + delBtn + '</td></tr>';
+        var safeEmpName = (r.empName||'').replace(/'/g, "\\'");
+        var safeEmpId   = r.empId || '';
+        var shiftIdx3   = r.shiftIndex !== undefined ? r.shiftIndex : 0;
+        var opCell = '<td class="operation-cell">' +
+          '<button class="btn btn-sm btn-outline" onclick="openManualClock(\'' + safeEmpId + '\',\'' + safeEmpName + '\',' + shiftIdx3 + ')">補登</button>' +
+          '<button class="btn btn-sm btn-danger" onclick="deleteRecord(\'' + recDocId + '\',\'' + safeEmpName + '\',\'' + r.date + '\')" style="margin-left:6px;">🗑 刪除</button>' +
+          '</td>';
+        html += '<tr><td>' + r.date + '</td><td>' + (r.empName||'') + '</td><td>' + (r.empDept||'') + '</td><td>' + shift + '</td><td>' + (r.clockIn||'--') + '</td><td>' + (r.clockOut||'--') + '</td><td>' + h + '</td><td style="font-size:12px;color:#999;">' + loc + '</td><td>' + (r.note||'') + '</td>' + opCell + '</tr>';
       });
       document.getElementById('recBody').innerHTML = html || '<tr><td colspan="10" class="empty-row">本月無出勤記錄</td></tr>';
     });
@@ -1282,14 +1288,39 @@ function loadRecords() {
 // 刪除打卡記錄
 // ============================================================
 function deleteRecord(recId, empName, date) {
-  if (!confirm('確定要刪除「' + empName + '」於 ' + date + ' 的打卡記錄？此操作無法復原。')) return;
+  // 步驟一：安全確認提示，防止主管誤點
+  var confirmDelete = confirm(
+    '⚠️ 確定要刪除這筆出勤紀錄嗎？\n\n' +
+    '員工：' + empName + '\n' +
+    '日期：' + date + '\n\n' +
+    '刪除後無法復原！'
+  );
+  if (!confirmDelete) return;
+
+  // 步驟二：找到按鈕元素，禁用防止重複點擊
+  var btn = event && event.target ? event.target : null;
+  if (btn) { btn.disabled = true; btn.textContent = '刪除中...'; }
+
+  // 步驟三：發送刪除請求至 Firebase Firestore
   db.collection('records').doc(recId).delete()
     .then(function() {
-      showToast('「' + empName + '」 ' + date + ' 的打卡記錄已刪除', 'success');
-      loadRecords();
+      // 步驟四：刪除成功，顯示成功提示並刷新畫面
+      showToast('「' + empName + '」 ' + date + ' 的出勤紀錄已成功刪除', 'success');
+      loadRecords();   // 重新拉取資料，刷新畫面
+      loadDashboard(); // 同步更新今日概況儀表板
     })
-    .catch(function(e) {
-      showToast('刪除失敗：' + e.message, 'error');
+    .catch(function(error) {
+      // 步驟五：錯誤處理
+      console.error('刪除打卡記錄時發生錯誤:', error);
+      if (btn) { btn.disabled = false; btn.innerHTML = '🗑 刪除'; }
+      if (error.code === 'permission-denied') {
+        showToast('權限不足，無法刪除此記錄', 'error');
+      } else if (error.code === 'not-found') {
+        showToast('記錄不存在，可能已經刪除', 'error');
+        loadRecords();
+      } else {
+        showToast('系統連線失敗，請稍後再試（' + (error.message || error.code) + '）', 'error');
+      }
     });
 }
 window.deleteRecord = deleteRecord;
