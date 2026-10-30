@@ -1112,9 +1112,12 @@ function renderDashTable(filter) {
     var co = (r && r.clockOut) || '--';
     var dept = e.dept ? e.dept : '<span class="text-missing">未設定</span>';
 
-    // 班別標籤
+    // 班別標籤：優先使用打卡紀錄，未打卡時改顯示班表指定班別與職務
+    var scheduledLabel = row.scheduledShift || '';
     var shiftBadge = r && r.shiftName
       ? '<span class="badge badge-blue">' + r.shiftName + '</span>'
+      : scheduledLabel
+      ? '<span class="badge badge-blue">' + scheduledLabel + '</span>' + (row.scheduledRole ? '<br><span class="field-hint">' + row.scheduledRole + '</span>' : '')
       : '<span class="badge badge-gray">未指定</span>';
 
     // 工時顯示
@@ -1143,7 +1146,7 @@ function renderDashTable(filter) {
     }
 
     // 補打卡按鈕（傳入班別索引）
-    var shiftIdx2 = r ? (r.shiftIndex !== undefined ? r.shiftIndex : 0) : 0;
+    var shiftIdx2 = r ? (r.shiftIndex !== undefined ? r.shiftIndex : 0) : (row.scheduledShiftIndex !== undefined ? row.scheduledShiftIndex : 0);
     var manualBtn = '<button class="btn btn-sm btn-outline" onclick="openManualClock(\'' + e.id + '\',\'' + e.name.replace(/'/g, "\\'") + '\',' + shiftIdx2 + ')">補登</button>';
 
     html += '<tr data-status="' + status + '">';
@@ -1744,3 +1747,232 @@ window.removeShiftRow     = removeShiftRow;
 window.useMyLocation      = useMyLocation;
 window.exportAttendanceCSV  = exportAttendanceCSV;
 window.exportWorkStatsCSV   = exportWorkStatsCSV;
+
+
+// ============================================================
+// 排班管理與指定日期區間工時查詢
+// ============================================================
+var scheduleMonthCursor = new Date(2026, 10, 1);
+var scheduleCache = {};
+var NOV_SCHEDULE_SOURCE = 'november_2026_schedule.json';
+
+function getMonthRange(d) {
+  var y = d.getFullYear();
+  var m = d.getMonth();
+  var start = y + '-' + String(m + 1).padStart(2, '0') + '-01';
+  var end = y + '-' + String(m + 1).padStart(2, '0') + '-' + String(new Date(y, m + 1, 0).getDate()).padStart(2, '0');
+  return { start: start, end: end };
+}
+
+function initDateRangeControls() {
+  var range = getMonthRange(new Date());
+  ['recStartDate', 'expStartDate', 'expStatsStartDate'].forEach(function(id) {
+    var el = document.getElementById(id); if (el && !el.value) el.value = range.start;
+  });
+  ['recEndDate', 'expEndDate', 'expStatsEndDate'].forEach(function(id) {
+    var el = document.getElementById(id); if (el && !el.value) el.value = range.end;
+  });
+}
+
+function setRecordRangeThisMonth() {
+  var range = getMonthRange(new Date());
+  document.getElementById('recStartDate').value = range.start;
+  document.getElementById('recEndDate').value = range.end;
+  loadRecords();
+}
+window.setRecordRangeThisMonth = setRecordRangeThisMonth;
+
+function loadScheduleMonth() {
+  var range = getMonthRange(scheduleMonthCursor);
+  var label = document.getElementById('scheduleMonthLabel');
+  if (label) label.textContent = scheduleMonthCursor.getFullYear() + ' 年 ' + (scheduleMonthCursor.getMonth() + 1) + ' 月';
+  db.collection('schedules').where('date', '>=', range.start).where('date', '<=', range.end).orderBy('date').get()
+    .then(function(snap) {
+      var rows = snap.docs.map(function(d) { return d.data(); });
+      scheduleCache = {}; rows.forEach(function(r) { scheduleCache[r.date] = r; });
+      renderScheduleTable(rows);
+    }).catch(function(e) { showToast('讀取班表失敗：' + (e.code || e.message), 'error'); });
+}
+
+function renderScheduleTable(rows) {
+  var body = document.getElementById('scheduleBody');
+  var summary = document.getElementById('scheduleSummary');
+  if (!body) return;
+  var total = rows.reduce(function(s, r) { return s + (r.assignments || []).length; }, 0);
+  if (summary) summary.textContent = '共 ' + rows.length + ' 日、' + total + ' 個已排班人次';
+  var html = '';
+  rows.forEach(function(r) {
+    var byShift = { '中班': [], '晚班': [] };
+    (r.assignments || []).forEach(function(a) { (byShift[a.shiftName] || (byShift[a.shiftName] = [])).push(a); });
+    function shiftHtml(shift) {
+      var items = byShift[shift] || [];
+      if (!items.length) return '<span class="text-missing">未排班</span>';
+      var roles = {};
+      items.forEach(function(a) { (roles[a.role] || (roles[a.role] = [])).push(a.name); });
+      return Object.keys(roles).map(function(role) {
+        return '<div class="schedule-shift-line"><span class="schedule-role">' + role + '</span>' + roles[role].map(function(n) { return '<span class="schedule-name">' + escapeHtml(n) + '</span>'; }).join('') + '</div>';
+      }).join('');
+    }
+    var vac = (r.vacancies || []).map(function(v) { return '<div class="schedule-vacancy">缺額：' + escapeHtml(v.shiftName) + ' ' + escapeHtml(v.role) + ' × ' + v.count + '</div>'; }).join('');
+    var note = r.note && r.note !== '—' ? '<div class="field-hint">' + escapeHtml(r.note) + '</div>' : '';
+    html += '<tr><td>' + r.date + '</td><td>' + (r.closed ? '<span class="schedule-closed">店休</span>' : '<span class="badge badge-green">營業</span>') + '</td><td>' + (r.closed ? '—' : shiftHtml('中班')) + '</td><td>' + (r.closed ? '—' : shiftHtml('晚班')) + '</td><td>' + vac + note + '</td></tr>';
+  });
+  body.innerHTML = html || '<tr><td colspan="5" class="empty-row">本月尚未匯入班表</td></tr>';
+}
+
+function escapeHtml(value) {
+  return String(value || '').replace(/[&<>'"]/g, function(c) { return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' })[c]; });
+}
+
+function shiftScheduleMonth(delta) {
+  scheduleMonthCursor = new Date(scheduleMonthCursor.getFullYear(), scheduleMonthCursor.getMonth() + delta, 1);
+  loadScheduleMonth();
+}
+window.shiftScheduleMonth = shiftScheduleMonth;
+window.loadScheduleMonth = loadScheduleMonth;
+
+function importNovember2026Schedule() {
+  var status = document.getElementById('scheduleImportStatus');
+  if (status) status.textContent = '正在下載班表資料並比對員工帳號…';
+  Promise.all([
+    fetch(NOV_SCHEDULE_SOURCE).then(function(r) { if (!r.ok) throw new Error('找不到班表資料檔'); return r.json(); }),
+    db.collection('users').get()
+  ]).then(function(results) {
+    var source = results[0];
+    var users = results[1].docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+    var userMap = {};
+    users.forEach(function(u) { if (u.name) userMap[u.name.trim()] = u; });
+    var batch = db.batch();
+    source.forEach(function(day) {
+      var assignments = (day.assignments || []).map(function(a) {
+        var u = userMap[(a.name || '').trim()];
+        return { name: a.name, empId: u ? u.id : '', role: a.role, shiftName: a.shiftName, linked: !!u };
+      });
+      batch.set(db.collection('schedules').doc(day.date), {
+        date: day.date, closed: !!day.closed, assignments: assignments,
+        vacancies: day.vacancies || [], note: day.note || '', source: '2026-11 班表匯入', updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    });
+    return batch.commit().then(function() {
+      var unmatched = [];
+      source.forEach(function(day) { (day.assignments || []).forEach(function(a) { if (!userMap[(a.name || '').trim()] && unmatched.indexOf(a.name) < 0) unmatched.push(a.name); }); });
+      if (status) status.textContent = '匯入完成：30 日班表已寫入。' + (unmatched.length ? '尚未連結帳號：' + unmatched.join('、') + '；請先在員工管理建立同名帳號。' : '所有排班姓名均已連結員工帳號。');
+      showToast('2026 年 11 月班表匯入完成', 'success');
+      scheduleMonthCursor = new Date(2026, 10, 1); loadScheduleMonth(); loadDashboard();
+    });
+  }).catch(function(e) { if (status) status.textContent = '匯入失敗：' + e.message; showToast('班表匯入失敗', 'error'); });
+}
+window.importNovember2026Schedule = importNovember2026Schedule;
+
+// 覆寫：依指定日期區間查詢出勤紀錄
+function loadRecords() {
+  var start = document.getElementById('recStartDate').value;
+  var end = document.getElementById('recEndDate').value;
+  var empFilter = document.getElementById('recEmp').value;
+  if (!start || !end || start > end) { showToast('請選擇有效的起訖日期', 'error'); return; }
+  db.collection('records').where('date', '>=', start).where('date', '<=', end).orderBy('date', 'desc').get()
+    .then(function(snap) {
+      var records = snap.docs.map(function(d) { return Object.assign({ _docId: d.id }, d.data()); });
+      if (empFilter) records = records.filter(function(r) { return r.empId === empFilter; });
+      var html = '';
+      records.forEach(function(r) {
+        var h = r.clockIn && r.clockOut ? calcHoursStr(r.clockIn, r.clockOut) : '--';
+        var loc = r.lat ? (r.lat.toFixed(4) + ', ' + r.lng.toFixed(4)) : '無位置';
+        var shift = r.shiftName ? '<span class="badge badge-blue">' + escapeHtml(r.shiftName) + '</span>' : '<span class="badge badge-gray">未指定</span>';
+        var safeName = (r.empName || '').replace(/'/g, "\\'");
+        html += '<tr><td>' + r.date + '</td><td>' + escapeHtml(r.empName) + '</td><td>' + escapeHtml(r.empDept) + '</td><td>' + shift + '</td><td>' + (r.clockIn || '--') + '</td><td>' + (r.clockOut || '--') + '</td><td>' + h + '</td><td style="font-size:12px;color:#999;">' + loc + '</td><td>' + escapeHtml(r.note || '') + '</td><td class="operation-cell"><button class="btn btn-sm btn-outline" onclick="openManualClock(\'' + r.empId + '\',\'' + safeName + '\',' + (r.shiftIndex || 0) + ')">補登</button><button class="btn btn-sm btn-danger" onclick="deleteRecord(\'' + r._docId + '\',\'' + safeName + '\',\'' + r.date + '\')" style="margin-left:6px;background:#ff4d4f;color:white;border:none;">🗑 刪除</button></td></tr>';
+      });
+      document.getElementById('recBody').innerHTML = html || '<tr><td colspan="10" class="empty-row">此期間無出勤記錄</td></tr>';
+    }).catch(function(e) { showToast('查詢失敗：' + (e.code || e.message), 'error'); });
+}
+window.loadRecords = loadRecords;
+
+// 覆寫：指定日期區間出勤 CSV
+function exportAttendanceCSV() {
+  var start = document.getElementById('expStartDate').value, end = document.getElementById('expEndDate').value, empFilter = document.getElementById('expEmp').value;
+  if (!start || !end || start > end) { showToast('請選擇有效的起訖日期', 'error'); return; }
+  db.collection('records').where('date', '>=', start).where('date', '<=', end).orderBy('date').get().then(function(snap) {
+    var records = snap.docs.map(function(d) { return d.data(); });
+    if (empFilter) records = records.filter(function(r) { return r.empId === empFilter; });
+    var csv = '\uFEFF日期,員工姓名,部門,班別,上班時間,下班時間,工作時數（小時）,打卡緯度,打卡經度\n';
+    records.forEach(function(r) { var h = r.clockIn && r.clockOut ? calcHoursDec(r.clockIn, r.clockOut).toFixed(2) : ''; csv += [r.date,r.empName||'',r.empDept||'',r.shiftName||'',r.clockIn||'',r.clockOut||'',h,r.lat||'',r.lng||''].map(csvCell).join(',') + '\n'; });
+    dlCSV(csv, '出勤記錄_' + start + '_至_' + end + '.csv'); showToast('出勤報表匯出成功', 'success');
+  });
+}
+
+function csvCell(v) { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+
+// 覆寫：指定日期區間工時統計 CSV
+function exportWorkStatsCSV() {
+  var start = document.getElementById('expStatsStartDate').value, end = document.getElementById('expStatsEndDate').value;
+  if (!start || !end || start > end) { showToast('請選擇有效的起訖日期', 'error'); return; }
+  Promise.all([db.collection('users').get(), db.collection('records').where('date', '>=', start).where('date', '<=', end).get()]).then(function(results) {
+    var employees = results[0].docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); }).filter(function(e) { return e.role === 'employee'; });
+    var records = results[1].docs.map(function(d) { return d.data(); });
+    var csv = '\uFEFF員工姓名,部門,出勤班次,完成班次,未下班班次,總工時（小時）,備註\n';
+    employees.forEach(function(e) {
+      var recs = records.filter(function(r) { return r.empId === e.id; });
+      var done = recs.filter(function(r) { return r.clockIn && r.clockOut; });
+      var open = recs.filter(function(r) { return r.clockIn && !r.clockOut; });
+      var total = done.reduce(function(sum, r) { return sum + calcHoursDec(r.clockIn, r.clockOut); }, 0);
+      csv += [e.name, e.dept || '', recs.length, done.length, open.length, total.toFixed(2), open.length ? '有未下班打卡班次' : ''].map(csvCell).join(',') + '\n';
+    });
+    dlCSV(csv, '工時統計_' + start + '_至_' + end + '.csv'); showToast('工時統計匯出成功', 'success');
+  });
+}
+window.exportAttendanceCSV = exportAttendanceCSV;
+window.exportWorkStatsCSV = exportWorkStatsCSV;
+
+// 覆寫：班表存在時，今日概況只列出已排班人員與對應班別
+function loadDashboard() {
+  if (!dashDate) dashDate = new Date();
+  var dateStr = fmtDate(dashDate), isToday = dateStr === fmtDate(new Date());
+  var dd = document.getElementById('dashDate');
+  if (dd) { dd.textContent = dashDate.toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric', weekday:'short' }); dd.style.color = isToday ? 'var(--primary)' : '#888'; }
+  if (liveWorkTimer) { clearInterval(liveWorkTimer); liveWorkTimer = null; }
+  Promise.all([db.collection('users').get(), db.collection('records').where('date', '==', dateStr).get(), db.collection('schedules').doc(dateStr).get()]).then(function(results) {
+    var employees = results[0].docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); }).filter(function(e) { return e.role === 'employee' && e.active !== false; });
+    var records = results[1].docs.map(function(d) { return d.data(); });
+    var schedule = results[2].exists ? results[2].data() : null;
+    var now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes();
+    var rows = [], present = 0, left = 0, absent = 0;
+    if (schedule && !schedule.closed) {
+      (schedule.assignments || []).forEach(function(a) {
+        if (!a.empId) return; // 未連結帳號的人員保留在班表頁提示，不列入打卡判定
+        var e = employees.filter(function(x) { return x.id === a.empId; })[0]; if (!e) return;
+        var shiftIndex = (sysSettings.shifts || []).findIndex(function(s) { return s.name === a.shiftName; }); if (shiftIndex < 0) shiftIndex = 0;
+        var rec = records.filter(function(r) { return r.empId === e.id && (r.shiftName === a.shiftName || r.shiftIndex === shiftIndex); })[0] || null;
+        var status = rec && rec.clockIn && rec.clockOut ? 'left' : rec && rec.clockIn ? 'present' : 'absent';
+        if (status === 'present') present++; else if (status === 'left') left++; else absent++;
+        rows.push({ emp:e, rec:rec, status:status, isLate:isToday && status === 'absent' && nowMin > shiftStartMinutes(a.shiftName) + 10, multiShift:false, scheduledShift:a.shiftName, scheduledRole:a.role, scheduledShiftIndex:shiftIndex });
+      });
+    } else {
+      employees.forEach(function(e) {
+        var empRecs = records.filter(function(r) { return r.empId === e.id; });
+        if (!empRecs.length) { absent++; rows.push({ emp:e, rec:null, status:'absent', isLate:false, multiShift:false }); }
+        else empRecs.forEach(function(r) { var status = r.clockIn && r.clockOut ? 'left' : r.clockIn ? 'present' : 'absent'; if(status==='present')present++;else if(status==='left')left++;else absent++; rows.push({emp:e,rec:r,status:status,isLate:false,multiShift:empRecs.length>1}); });
+      });
+    }
+    dashAllRows = rows;
+    document.getElementById('kpiTotal').textContent = rows.length;
+    document.getElementById('kpiPresent').textContent = present;
+    document.getElementById('kpiLeft').textContent = left;
+    document.getElementById('kpiAbsent').textContent = absent;
+    var t = rows.length || 1; setRing('ringTotal', 1); setRing('ringPresent', present/t); setRing('ringLeft', left/t); setRing('ringAbsent', absent/t);
+    renderDashTable();
+  }).catch(function(e) { showToast('載入出勤概況失敗：' + (e.code || e.message), 'error'); });
+}
+function shiftStartMinutes(name) { var s = (sysSettings.shifts || []).filter(function(x) { return x.name === name; })[0]; var p = (s ? s.start : '09:00').split(':'); return parseInt(p[0]) * 60 + parseInt(p[1]); }
+
+var _originalSwitchTab = switchTab;
+function switchTab(tabName, el) {
+  _originalSwitchTab(tabName, el);
+  if (tabName === 'schedule') loadScheduleMonth();
+}
+window.switchTab = switchTab;
+
+var _originalInitAdmin = initAdmin;
+function initAdmin() {
+  _originalInitAdmin();
+  initDateRangeControls();
+}
