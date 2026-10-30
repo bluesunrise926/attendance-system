@@ -473,3 +473,19 @@ body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; background
   justify-content: center;
   padding: 0 4px;
 }
+
+/* 班表管理與日期區間查詢 */
+.range-filter-row { align-items: end; }
+.range-field { display: flex; flex-direction: column; gap: 5px; }
+.range-field label { font-size: 12px; font-weight: 600; color: #666; }
+.range-field input { min-height: 38px; }
+.schedule-import-card { border-left: 4px solid var(--primary); }
+.schedule-closed { color: #6b7280; font-weight: 700; }
+.schedule-shift-line { line-height: 1.7; white-space: normal; }
+.schedule-role { display: inline-block; min-width: 38px; color: #667085; font-size: 12px; }
+.schedule-name { display: inline-block; background: #eef2ff; color: #3730a3; border-radius: 999px; padding: 2px 8px; margin: 2px 3px 2px 0; font-size: 12px; }
+.schedule-vacancy { color: #c2410c; font-weight: 700; font-size: 12px; }
+@media (max-width: 768px) {
+  .range-filter-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .range-filter-row select, .range-filter-row button { width: 100%; }
+}
