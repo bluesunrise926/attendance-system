@@ -178,6 +178,7 @@ function handleLogin() {
   var password = document.getElementById('loginPassword').value;
   var errEl    = document.getElementById('loginError');
   var btn      = document.getElementById('loginBtn');
+  var loginStage = '驗證帳號';
 
   if (!email || !password) { showError(errEl, '請輸入電子郵件與密碼'); return; }
 
@@ -196,14 +197,15 @@ function handleLogin() {
   auth.signInWithEmailAndPassword(email, password)
     .then(function(cred) {
       currentUser = cred.user;
+      loginStage = '讀取使用者資料';
       return loadUserData(cred.user.uid);
     })
     .then(function() {
+      loginStage = '讀取系統設定';
       return loadSettings();
     })
     .then(function() {
-      btn.textContent = '登入';
-      btn.disabled    = false;
+      loginStage = '初始化系統畫面';
       if (currentUserData && currentUserData.role === 'admin') {
         showScreen('adminScreen');
         initAdmin();
@@ -212,18 +214,32 @@ function handleLogin() {
         initEmployee();
       }
       startIdleWatch();
-    })
-    .catch(function(e) {
       btn.textContent = '登入';
-      btn.disabled    = false;
+      btn.disabled = false;
+    })
+    .catch(function(error) {
+      // 保留完整例外於主控台；非 Firebase 例外也會被安全地格式化，不再顯示 undefined。
+      console.error('登入發生錯誤（階段：' + loginStage + '）：', error);
+      btn.textContent = '登入';
+      btn.disabled = false;
       showScreen('loginScreen');
-      var msg = (e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found')
-        ? '帳號或密碼錯誤，請重新輸入'
-        : e.code === 'auth/too-many-requests'
-        ? '登入失敗次數過多，請稍後再試'
-        : e.code === 'auth/invalid-email'
-        ? '電子郵件格式不正確'
-        : '登入失敗，請確認網路連線（' + e.code + '）';
+
+      var code = error && error.code ? String(error.code) : '';
+      var detail = error && (error.message || error.code) ? String(error.message || error.code) : '未取得可辨識的錯誤資訊';
+      var msg;
+      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
+        msg = '帳號或密碼錯誤，請重新輸入';
+      } else if (code === 'auth/too-many-requests') {
+        msg = '登入失敗次數過多，請稍後再試';
+      } else if (code === 'auth/invalid-email') {
+        msg = '電子郵件格式不正確';
+      } else if (code === 'permission-denied' || code === 'firestore/permission-denied') {
+        msg = '帳號已驗證，但沒有讀取系統資料的權限。請檢查 Firestore 規則是否已發布。';
+      } else if (loginStage === '驗證帳號') {
+        msg = '登入驗證失敗：' + detail;
+      } else {
+        msg = loginStage + '失敗：' + detail;
+      }
       showError(errEl, msg);
     });
 }
