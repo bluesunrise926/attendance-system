@@ -977,6 +977,7 @@ function initAdmin() {
   populateMonthSel('recMonth');
   populateMonthSel('expMonth');
   populateMonthSel('expMonthStats');
+  initDateRangeControls();
   dashDate = new Date();
   loadDashboard();
   loadEmployeeList();
@@ -1659,9 +1660,10 @@ function switchTab(tabName, el) {
   document.getElementById('tab-' + tabName).classList.add('active');
   el.classList.add('active');
   if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('open');
-  if (tabName === 'dashboard')  loadDashboard();
-  if (tabName === 'records')    loadRecords();
-  if (tabName === 'employees')  loadEmployeeList();
+  if (tabName === 'dashboard') loadDashboard();
+  if (tabName === 'records') loadRecords();
+  if (tabName === 'employees') loadEmployeeList();
+  if (tabName === 'schedule') loadScheduleMonth();
 }
 
 function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
@@ -1980,15 +1982,4 @@ function loadDashboard() {
 }
 function shiftStartMinutes(name) { var s = (sysSettings.shifts || []).filter(function(x) { return x.name === name; })[0]; var p = (s ? s.start : '09:00').split(':'); return parseInt(p[0]) * 60 + parseInt(p[1]); }
 
-var _originalSwitchTab = switchTab;
-function switchTab(tabName, el) {
-  _originalSwitchTab(tabName, el);
-  if (tabName === 'schedule') loadScheduleMonth();
-}
 window.switchTab = switchTab;
-
-var _originalInitAdmin = initAdmin;
-function initAdmin() {
-  _originalInitAdmin();
-  initDateRangeControls();
-}
