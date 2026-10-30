@@ -33,6 +33,12 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // 班表：登入用戶可讀取自己的排班與後台概況，僅管理員可匯入或修改
+    match /schedules/{scheduleId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
     // 系統設定：只有管理員可寫，所有登入用戶可讀
     match /settings/{settingId} {
       allow read:  if request.auth != null;
