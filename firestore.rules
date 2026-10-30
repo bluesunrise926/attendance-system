@@ -2,54 +2,56 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // 輔助函數：判斷目前登入者是否為管理員
+    // 先確認登入，再確認管理員文件確實存在，避免 role 欄位或文件不存在時造成判斷異常。
+    function signedIn() {
+      return request.auth != null;
+    }
+
     function isAdmin() {
-      return request.auth != null &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // 用戶資料：
-    // - 所有登入用戶可讀（顯示員工列表）
-    // - 管理員可寫所有用戶資料
-    // - 用戶本人可寫自己的資料（自助註冊）
     match /users/{userId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null &&
-        (request.auth.uid == userId || isAdmin());
-      allow update: if request.auth != null &&
-        (request.auth.uid == userId || isAdmin());
+      allow read: if signedIn();
+
+      // 員工只能建立自己的初始 employee 資料；管理員可建立任何使用者。
+      allow create: if isAdmin()
+        || (signedIn()
+          && request.auth.uid == userId
+          && request.resource.data.role == 'employee');
+
+      // 員工可更新自己的基本資料，但不能把自己的角色改為 admin；管理員可管理全部資料。
+      allow update: if isAdmin()
+        || (signedIn()
+          && request.auth.uid == userId
+          && request.resource.data.role == resource.data.role);
+
       allow delete: if isAdmin();
     }
 
-    // 出勤記錄：
-    // - 所有登入用戶可讀（員工查自己的記錄、管理員查所有記錄）
-    // - 所有登入用戶可新增（員工打卡）
-    // - 所有登入用戶可更新（下班打卡更新同一筆記錄）
-    // - 只有管理員可刪除（防止員工自行刪除打卡記錄）
     match /records/{recordId} {
-      allow read:   if request.auth != null;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null;
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update: if signedIn();
       allow delete: if isAdmin();
     }
 
-    // 班表：登入用戶可讀取自己的排班與後台概況，僅管理員可匯入或修改
     match /schedules/{scheduleId} {
-      allow read: if request.auth != null;
+      allow read: if signedIn();
       allow write: if isAdmin();
     }
 
-    // 系統設定：只有管理員可寫，所有登入用戶可讀
     match /settings/{settingId} {
-      allow read:  if request.auth != null;
+      allow read: if signedIn();
       allow write: if isAdmin();
     }
 
-    // 通知記錄：登入用戶可讀寫（下班提醒通知）
     match /notifications/{notifId} {
-      allow read:   if request.auth != null;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null;
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update: if signedIn();
       allow delete: if isAdmin();
     }
   }
