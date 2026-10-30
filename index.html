@@ -224,6 +224,9 @@
         <a class="nav-link" data-tab="employees" onclick="switchTab('employees',this)">
           <span>👥</span><span>員工管理</span>
         </a>
+        <a class="nav-link" data-tab="schedule" onclick="switchTab('schedule',this)">
+          <span>🗓️</span><span>班表管理</span>
+        </a>
         <a class="nav-link" data-tab="settings" onclick="switchTab('settings',this)">
           <span>⚙️</span><span>系統設定</span>
         </a>
@@ -333,11 +336,12 @@
       <!-- 出勤記錄 -->
       <section id="tab-records" class="tab-section">
         <h2 class="section-heading">出勤記錄查詢</h2>
-        <div class="filter-row">
-          <select id="recMonth" onchange="loadRecords()" class="filter-sel"></select>
-          <select id="recEmp"   onchange="loadRecords()" class="filter-sel">
-            <option value="">全部員工</option>
-          </select>
+        <div class="filter-row range-filter-row">
+          <div class="range-field"><label for="recStartDate">起始日期</label><input type="date" id="recStartDate" onchange="loadRecords()" class="filter-sel"></div>
+          <div class="range-field"><label for="recEndDate">結束日期</label><input type="date" id="recEndDate" onchange="loadRecords()" class="filter-sel"></div>
+          <select id="recEmp" onchange="loadRecords()" class="filter-sel"><option value="">全部員工</option></select>
+          <button class="btn btn-outline btn-sm" onclick="setRecordRangeThisMonth()">本月</button>
+          <button class="btn btn-primary btn-sm" onclick="loadRecords()">查詢</button>
         </div>
         <div class="card">
           <div class="table-wrap">
@@ -370,6 +374,21 @@
               <tbody id="empBody"></tbody>
             </table>
           </div>
+        </div>
+      </section>
+
+      <!-- 班表管理 -->
+      <section id="tab-schedule" class="tab-section">
+        <div class="dash-heading-row"><h2 class="section-heading">班表管理</h2><div class="date-nav"><button class="date-nav-btn" onclick="shiftScheduleMonth(-1)" title="前一月">&#8249;</button><span class="heading-date" id="scheduleMonthLabel"></span><button class="date-nav-btn" onclick="shiftScheduleMonth(1)" title="下一月">&#8250;</button></div></div>
+        <div class="card schedule-import-card">
+          <h3>📥 班表匯入</h3>
+          <p class="card-desc">可將已整理的 2026 年 11 月班表匯入資料庫。匯入後，今日概況會依排班人員顯示「應上班未打卡」、「已上班未下班」與完成狀態；重複匯入會覆蓋同日期班表。</p>
+          <div class="btn-row"><button class="btn btn-primary" onclick="importNovember2026Schedule()">匯入 2026 年 11 月班表</button><button class="btn btn-outline" onclick="loadScheduleMonth()">重新整理</button></div>
+          <p id="scheduleImportStatus" class="field-hint" style="margin-top:10px;"></p>
+        </div>
+        <div class="card">
+          <div class="card-head-row"><span>每日排班明細</span><span id="scheduleSummary" class="field-hint"></span></div>
+          <div class="table-wrap"><table class="dt"><thead><tr><th>日期</th><th>狀態</th><th>中班</th><th>晚班</th><th>缺額／備註</th></tr></thead><tbody id="scheduleBody"></tbody></table></div>
         </div>
       </section>
 
@@ -423,33 +442,18 @@
         <div class="export-grid">
           <div class="card export-card">
             <div class="export-icon">📅</div>
-            <h3>月度出勤報表</h3>
-            <p>匯出指定月份所有員工的每日上下班時間，符合勞基法保存要求</p>
-            <div class="form-group">
-              <label>選擇月份</label>
-              <select id="expMonth" class="full-select"></select>
-            </div>
-            <div class="form-group">
-              <label>員工篩選</label>
-              <select id="expEmp" class="full-select">
-                <option value="">全部員工</option>
-              </select>
-            </div>
-            <button class="btn btn-primary btn-full" onclick="exportAttendanceCSV()">
-              📥 匯出 CSV（可用 Excel 開啟）
-            </button>
+            <h3>指定期間出勤報表</h3>
+            <p>依起訖日期匯出所有員工的每日上下班時間，符合勞基法保存要求</p>
+            <div class="form-row-2"><div class="form-group"><label>起始日期</label><input type="date" id="expStartDate"></div><div class="form-group"><label>結束日期</label><input type="date" id="expEndDate"></div></div>
+            <div class="form-group"><label>員工篩選</label><select id="expEmp" class="full-select"><option value="">全部員工</option></select></div>
+            <button class="btn btn-primary btn-full" onclick="exportAttendanceCSV()">📥 匯出 CSV（可用 Excel 開啟）</button>
           </div>
           <div class="card export-card">
             <div class="export-icon">⏱️</div>
-            <h3>工時統計報表</h3>
-            <p>統計每位員工的月度總工時、出勤天數、加班時數</p>
-            <div class="form-group">
-              <label>選擇月份</label>
-              <select id="expMonthStats" class="full-select"></select>
-            </div>
-            <button class="btn btn-primary btn-full" onclick="exportWorkStatsCSV()">
-              📥 匯出 CSV（可用 Excel 開啟）
-            </button>
+            <h3>指定期間工時統計</h3>
+            <p>依起訖日期統計每位員工的出勤班次、總工時與加班時數</p>
+            <div class="form-row-2"><div class="form-group"><label>起始日期</label><input type="date" id="expStatsStartDate"></div><div class="form-group"><label>結束日期</label><input type="date" id="expStatsEndDate"></div></div>
+            <button class="btn btn-primary btn-full" onclick="exportWorkStatsCSV()">📥 匯出 CSV（可用 Excel 開啟）</button>
           </div>
         </div>
         <div class="legal-box">
