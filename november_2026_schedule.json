@@ -1,0 +1,1370 @@
+[
+  {
+    "date": "2026-11-01",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "小華",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "書銘",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "苙達",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "Mandy",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "于菱",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "書銘",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "老闆娘",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [
+      {
+        "shiftName": "中班",
+        "role": "助手",
+        "count": 1
+      }
+    ],
+    "note": "阿亮休；小宇休；苙達／老闆娘補廚師；于菱代晚班"
+  },
+  {
+    "date": "2026-11-02",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "書銘",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "Gina",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "書銘",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "小宇",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [
+      {
+        "shiftName": "中班",
+        "role": "助手",
+        "count": 1
+      }
+    ],
+    "note": "阿亮休；Gina代晚班"
+  },
+  {
+    "date": "2026-11-03",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "書銘",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "Gina",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "書銘",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "小宇",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [],
+    "note": "—"
+  },
+  {
+    "date": "2026-11-04",
+    "closed": true,
+    "assignments": [],
+    "vacancies": [],
+    "note": "週三店休"
+  },
+  {
+    "date": "2026-11-05",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "書銘",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "Gina",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "書銘",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "小宇",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [
+      {
+        "shiftName": "中班",
+        "role": "助手",
+        "count": 1
+      }
+    ],
+    "note": "阿華姐休；Gina補週四"
+  },
+  {
+    "date": "2026-11-06",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "書銘",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "書銘",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "小宇",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [
+      {
+        "shiftName": "中班",
+        "role": "助手",
+        "count": 1
+      },
+      {
+        "shiftName": "晚班",
+        "role": "助手",
+        "count": 1
+      }
+    ],
+    "note": "阿華姐休"
+  },
+  {
+    "date": "2026-11-07",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "阿亮",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "書銘",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "老闆娘",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "阿亮",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "Mandy",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "書銘",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "苙達",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [
+      {
+        "shiftName": "中班",
+        "role": "助手",
+        "count": 1
+      }
+    ],
+    "note": "阿華姐休；小宇休；苙達／老闆娘補廚師"
+  },
+  {
+    "date": "2026-11-08",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "阿亮",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "小華",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "書銘",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "苙達",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "阿亮",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "于菱",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "書銘",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "老闆娘",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [],
+    "note": "小宇休；Mandy休；苙達／老闆娘補廚師；于菱代晚班"
+  },
+  {
+    "date": "2026-11-09",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "阿亮",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "書銘",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "阿亮",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "書銘",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "小宇",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [],
+    "note": "韋瑄可上"
+  },
+  {
+    "date": "2026-11-10",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "書銘",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "Gina",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "書銘",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "小宇",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [],
+    "note": "—"
+  },
+  {
+    "date": "2026-11-11",
+    "closed": true,
+    "assignments": [],
+    "vacancies": [],
+    "note": "週三店休"
+  },
+  {
+    "date": "2026-11-12",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "小華",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "書銘",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "韋瑄",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "書銘",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "小宇",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [],
+    "note": "韋瑄可上；韋瑄優先週四"
+  },
+  {
+    "date": "2026-11-13",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "小華",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "書銘",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "韋瑄",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "書銘",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "小宇",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [],
+    "note": "韋瑄可上"
+  },
+  {
+    "date": "2026-11-14",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "阿亮",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "小華",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "書銘",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "老闆娘",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "阿亮",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "Mandy",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "書銘",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "苙達",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [],
+    "note": "小宇休；苙達／老闆娘補廚師"
+  },
+  {
+    "date": "2026-11-15",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "阿亮",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "小華",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "書銘",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "苙達",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "阿亮",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "Mandy",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "書銘",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "老闆娘",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [],
+    "note": "小宇休；苙達／老闆娘補廚師；書銘最後服務日"
+  },
+  {
+    "date": "2026-11-16",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "阿亮",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "阿亮",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "小宇",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [
+      {
+        "shiftName": "晚班",
+        "role": "廚師",
+        "count": 1
+      }
+    ],
+    "note": "韋瑄可上；書銘離職"
+  },
+  {
+    "date": "2026-11-17",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "強尼",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "Gina",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "小宇",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [
+      {
+        "shiftName": "晚班",
+        "role": "廚師",
+        "count": 1
+      }
+    ],
+    "note": "書銘離職"
+  },
+  {
+    "date": "2026-11-18",
+    "closed": true,
+    "assignments": [],
+    "vacancies": [],
+    "note": "週三店休"
+  },
+  {
+    "date": "2026-11-19",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "小華",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "韋瑄",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "小宇",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [
+      {
+        "shiftName": "中班",
+        "role": "廚師",
+        "count": 1
+      }
+    ],
+    "note": "韋瑄可上；韋瑄優先週四；書銘離職"
+  },
+  {
+    "date": "2026-11-20",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "小華",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "小宇",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [
+      {
+        "shiftName": "晚班",
+        "role": "助手",
+        "count": 1
+      },
+      {
+        "shiftName": "晚班",
+        "role": "廚師",
+        "count": 1
+      }
+    ],
+    "note": "書銘離職"
+  },
+  {
+    "date": "2026-11-21",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "阿亮",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "小華",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "苙達",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "老闆娘",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "阿亮",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "Mandy",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "苙達",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "老闆娘",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [],
+    "note": "小宇休；苙達／老闆娘補廚師；書銘離職"
+  },
+  {
+    "date": "2026-11-22",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "阿亮",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "小華",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "小宇",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "阿亮",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "Mandy",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "小宇",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [
+      {
+        "shiftName": "中班",
+        "role": "廚師",
+        "count": 1
+      },
+      {
+        "shiftName": "晚班",
+        "role": "廚師",
+        "count": 1
+      }
+    ],
+    "note": "書銘離職"
+  },
+  {
+    "date": "2026-11-23",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "阿亮",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "阿亮",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "小宇",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [
+      {
+        "shiftName": "晚班",
+        "role": "廚師",
+        "count": 1
+      }
+    ],
+    "note": "韋瑄可上；書銘離職"
+  },
+  {
+    "date": "2026-11-24",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "強尼",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "Gina",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "小宇",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [
+      {
+        "shiftName": "晚班",
+        "role": "廚師",
+        "count": 1
+      }
+    ],
+    "note": "書銘離職"
+  },
+  {
+    "date": "2026-11-25",
+    "closed": true,
+    "assignments": [],
+    "vacancies": [],
+    "note": "週三店休"
+  },
+  {
+    "date": "2026-11-26",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "小華",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "韋瑄",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "小宇",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [
+      {
+        "shiftName": "中班",
+        "role": "廚師",
+        "count": 1
+      }
+    ],
+    "note": "韋瑄可上；韋瑄優先週四；書銘離職"
+  },
+  {
+    "date": "2026-11-27",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "小華",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "韋瑄",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "小宇",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [
+      {
+        "shiftName": "晚班",
+        "role": "廚師",
+        "count": 1
+      }
+    ],
+    "note": "韋瑄可上；書銘離職"
+  },
+  {
+    "date": "2026-11-28",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "阿亮",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "小華",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "小宇",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "阿亮",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "Mandy",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "小宇",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [
+      {
+        "shiftName": "中班",
+        "role": "廚師",
+        "count": 1
+      },
+      {
+        "shiftName": "晚班",
+        "role": "廚師",
+        "count": 1
+      }
+    ],
+    "note": "書銘離職"
+  },
+  {
+    "date": "2026-11-29",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "阿亮",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "小宇",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "阿亮",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "Mandy",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "小宇",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [
+      {
+        "shiftName": "中班",
+        "role": "助手",
+        "count": 1
+      },
+      {
+        "shiftName": "中班",
+        "role": "廚師",
+        "count": 1
+      },
+      {
+        "shiftName": "晚班",
+        "role": "廚師",
+        "count": 1
+      }
+    ],
+    "note": "阿華姐休；書銘離職"
+  },
+  {
+    "date": "2026-11-30",
+    "closed": false,
+    "assignments": [
+      {
+        "name": "阿亮",
+        "shiftName": "中班",
+        "role": "助手"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "中班",
+        "role": "廚師"
+      },
+      {
+        "name": "阿亮",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "家榛",
+        "shiftName": "晚班",
+        "role": "助手"
+      },
+      {
+        "name": "強尼",
+        "shiftName": "晚班",
+        "role": "廚師"
+      },
+      {
+        "name": "小宇",
+        "shiftName": "晚班",
+        "role": "廚師"
+      }
+    ],
+    "vacancies": [
+      {
+        "shiftName": "晚班",
+        "role": "廚師",
+        "count": 1
+      }
+    ],
+    "note": "韋瑄可上；書銘離職"
+  }
+]
